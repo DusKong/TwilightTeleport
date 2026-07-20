@@ -44,14 +44,17 @@ public abstract class ServerPlayerEntityTeleportMixin {
                                 destinationX,
                                 destinationY,
                                 destinationZ,
-                                () -> player.teleport(
-                                        destinationWorld,
-                                        destinationX,
-                                        destinationY,
-                                        destinationZ,
-                                        yaw,
-                                        pitch
-                                )
+                                () -> {
+                                    player.teleport(
+                                            destinationWorld,
+                                            destinationX,
+                                            destinationY,
+                                            destinationZ,
+                                            yaw,
+                                            pitch
+                                    );
+                                    return true;
+                                }
                         );
 
         if (intercepted) {
@@ -80,21 +83,41 @@ public abstract class ServerPlayerEntityTeleportMixin {
         ServerPlayerEntity player =
                 (ServerPlayerEntity) (Object) this;
 
-        
+        Set<PositionFlag> copiedFlags = Set.copyOf(flags);
+
+        double resolvedX = resolveCoordinate(
+                player.getX(),
+                destinationX,
+                copiedFlags,
+                PositionFlag.X
+        );
+        double resolvedY = resolveCoordinate(
+                player.getY(),
+                destinationY,
+                copiedFlags,
+                PositionFlag.Y
+        );
+        double resolvedZ = resolveCoordinate(
+                player.getZ(),
+                destinationZ,
+                copiedFlags,
+                PositionFlag.Z
+        );
+
         boolean intercepted =
                 PendingTeleportManager
                         .interceptExternalTeleport(
                                 player,
                                 destinationWorld,
-                                destinationX,
-                                destinationY,
-                                destinationZ,
+                                resolvedX,
+                                resolvedY,
+                                resolvedZ,
                                 () -> player.teleport(
                                         destinationWorld,
                                         destinationX,
                                         destinationY,
                                         destinationZ,
-                                        Set.of(),
+                                        copiedFlags,
                                         yaw,
                                         pitch
                                 )
@@ -103,5 +126,16 @@ public abstract class ServerPlayerEntityTeleportMixin {
         if (intercepted) {
             cir.setReturnValue(true);
         }
+    }
+
+    private static double resolveCoordinate(
+            double current,
+            double requested,
+            Set<PositionFlag> flags,
+            PositionFlag coordinateFlag
+    ) {
+        return flags.contains(coordinateFlag)
+                ? current + requested
+                : requested;
     }
 }

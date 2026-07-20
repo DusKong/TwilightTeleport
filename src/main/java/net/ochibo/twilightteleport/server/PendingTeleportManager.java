@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import net.ochibo.twilightteleport.TeleportTimingProfile;
+import net.ochibo.twilightteleport.TwilightTeleport;
 import net.ochibo.twilightteleport.network.TeleportClientState;
 import net.ochibo.twilightteleport.network.TeleportClientStatePayload;
 import net.ochibo.twilightteleport.network.TeleportEffectAction;
@@ -64,7 +65,7 @@ public final class PendingTeleportManager {
             double destinationX,
             double destinationY,
             double destinationZ,
-            Runnable deferredTeleportAction
+            DeferredTeleportAction deferredTeleportAction
     ) {
         UUID playerUuid = player.getUuid();
 
@@ -176,16 +177,16 @@ public final class PendingTeleportManager {
         return false;
     }
 
-    private static void runWithoutInterception(
+    private static boolean runWithoutInterception(
             ServerPlayerEntity player,
-            Runnable action
+            DeferredTeleportAction action
     ) {
         UUID playerUuid = player.getUuid();
 
         INTERCEPTION_BYPASS.add(playerUuid);
 
         try {
-            action.run();
+            return action.execute();
         } finally {
             INTERCEPTION_BYPASS.remove(playerUuid);
         }
@@ -248,10 +249,23 @@ public final class PendingTeleportManager {
             ServerPlayerEntity player,
             PendingTeleportSession session
     ) {
-        Runnable action =
+        DeferredTeleportAction action =
                 session.deferredTeleportAction();
 
         if (action == null) {
+            MinecraftServer server = player.getServer();
+
+            if (server != null) {
+                clear(server, session);
+            }
+
+            return;
+        }
+
+        MinecraftServer server = player.getServer();
+
+        if (server == null) {
+            SESSIONS.remove(session.playerUuid(), session);
             return;
         }
 
@@ -261,10 +275,37 @@ public final class PendingTeleportManager {
         player.setSprinting(false);
         player.setSneaking(false);
 
-        runWithoutInterception(
-                player,
-                action
-        );
+        boolean succeeded;
+
+        try {
+            succeeded = runWithoutInterception(
+                    player,
+                    action
+            );
+        } catch (RuntimeException exception) {
+            TwilightTeleport.LOGGER.error(
+                    "Deferred teleport failed for player {}",
+                    player.getGameProfile().getName(),
+                    exception
+            );
+
+            clear(server, session);
+            return;
+        }
+
+        if (!succeeded) {
+            TwilightTeleport.LOGGER.warn(
+                    "Deferred teleport was rejected for player {}",
+                    player.getGameProfile().getName()
+            );
+
+            clear(server, session);
+            return;
+        }
+
+        if (SESSIONS.get(session.playerUuid()) != session) {
+            return;
+        }
 
         TeleportEffectBroadcaster.sendToCurrentTrackers(
                 session,
@@ -338,7 +379,7 @@ public final class PendingTeleportManager {
                 case DISSOLVING -> {
                     if (session.phaseTicks()
                             >= session.timings().dissolveTimeoutTicks()) {
-                        clear(server, session);
+                        performDeferredTeleport(player, session);
                     }
                 }
 
@@ -449,6 +490,9 @@ public final class PendingTeleportManager {
         if (session != null) {
             clear(server, session);
         }
+
+        INTERCEPTION_BYPASS.remove(playerUuid);
+        TELEPORT_TARGET_BYPASS_DEPTH.remove(playerUuid);
     }
 
     private static void clear(
@@ -476,5 +520,10 @@ public final class PendingTeleportManager {
         TELEPORT_TARGET_BYPASS_DEPTH.remove(
                 session.playerUuid()
         );
+    }
+
+    @FunctionalInterface
+    public interface DeferredTeleportAction {
+        boolean execute();
     }
 }

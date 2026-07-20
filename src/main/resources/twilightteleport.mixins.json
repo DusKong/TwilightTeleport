@@ -6,13 +6,13 @@
   "mixins": [
     "ServerPlayerEntityTeleportMixin",
     "ServerPlayerEntityTeleportTargetMixin",
-    "ServerPlayNetworkHandlerTeleportMixin",
-    "client.EntityMixin"
+    "ServerPlayNetworkHandlerTeleportMixin"
   ],
   "client": [
     "client.CameraAccessor",
     "client.CameraMixin",
     "client.ClientPlayNetworkHandlerMixin",
+    "client.EntityMixin",
     "client.InGameHudMixin",
     "client.KeyboardInputMixin",
     "client.LivingEntityRendererMixin",

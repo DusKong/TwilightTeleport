@@ -9,7 +9,8 @@ import java.util.UUID;
 final class PendingTeleportSession {
     private final UUID sessionId;
     private final UUID playerUuid;
-    private final Runnable deferredTeleportAction;
+    private final PendingTeleportManager.DeferredTeleportAction
+            deferredTeleportAction;
     private final TeleportTimingProfile timings;
     private final Set<UUID> observers = new HashSet<>();
 
@@ -20,7 +21,8 @@ final class PendingTeleportSession {
     static PendingTeleportSession deferred(
             UUID sessionId,
             UUID playerUuid,
-            Runnable deferredTeleportAction,
+            PendingTeleportManager.DeferredTeleportAction
+                    deferredTeleportAction,
             TeleportTimingProfile timings
     ) {
         return new PendingTeleportSession(
@@ -34,7 +36,8 @@ final class PendingTeleportSession {
     private PendingTeleportSession(
             UUID sessionId,
             UUID playerUuid,
-            Runnable deferredTeleportAction,
+            PendingTeleportManager.DeferredTeleportAction
+                    deferredTeleportAction,
             TeleportTimingProfile timings
     ) {
         this.sessionId = sessionId;
@@ -57,7 +60,8 @@ final class PendingTeleportSession {
         return deferredTeleportAction != null;
     }
 
-    Runnable deferredTeleportAction() {
+    PendingTeleportManager.DeferredTeleportAction
+    deferredTeleportAction() {
         return deferredTeleportAction;
     }
 

@@ -14,6 +14,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.chunk.WorldChunk;
+import net.ochibo.twilightteleport.client.hud.TeleportLoadingStatusHud;
 import net.ochibo.twilightteleport.client.network.TeleportClientNetworking;
 import net.ochibo.twilightteleport.network.TeleportClientState;
 
@@ -23,7 +24,8 @@ public final class TeleportCameraController {
     
 
     private static final int ARRIVAL_CAPTURE_DELAY_TICKS = 2;
-    private static final int TELEPORT_TIMEOUT_TICKS = 120;
+    private static final int LOCAL_TELEPORT_TIMEOUT_TICKS = 120;
+    private static final int NETWORK_TELEPORT_TIMEOUT_TICKS = 20 * 55;
 
     
     private static final int MIN_RENDER_WAIT_TICKS = 10;
@@ -173,11 +175,16 @@ public final class TeleportCameraController {
             return;
         }
 
-        
-        if (phase == Phase.WAITING_FOR_TELEPORT
-                || phase == Phase.WAITING_FOR_RENDER
-                || phase == Phase.WAITING_FOR_REBUILD_SIGNAL) {
-            cancel();
+        switch (phase) {
+            case MOVE_TO_SIDE,
+                 ORBIT_AND_FADE_OUT,
+                 WAITING_FOR_TELEPORT,
+                 WAITING_FOR_RENDER,
+                 WAITING_FOR_REBUILD_SIGNAL,
+                 DESTINATION_HOLD -> cancel();
+
+            default -> {
+            }
         }
     }
 
@@ -233,6 +240,7 @@ public final class TeleportCameraController {
         blackoutWaitTicks = 0;
         lastLoadedChunkRatio = 0.0F;
         loadingStatus = LoadingStatus.NONE;
+        TeleportLoadingStatusHud.reset();
 
         actionWhenFullyBlack = actionWhenBlack == null
                 ? () -> {
@@ -264,6 +272,19 @@ public final class TeleportCameraController {
         ClientPlayerEntity player = client.player;
 
         if (player == null || client.world == null) {
+            if (activeNetworkSessionId != null
+                    && isBlackoutWaitPhase()) {
+                phaseTicks++;
+                blackoutWaitTicks++;
+                loadingStatus = LoadingStatus.WAITING_FOR_WORLD;
+
+                if (phaseTicks >= NETWORK_TELEPORT_TIMEOUT_TICKS) {
+                    cancel();
+                }
+
+                return;
+            }
+
             cancel();
             return;
         }
@@ -314,7 +335,7 @@ public final class TeleportCameraController {
                         captureArrival(client);
                     }
                 } else if (activeNetworkSessionId == null
-                        && phaseTicks >= TELEPORT_TIMEOUT_TICKS) {
+                        && phaseTicks >= LOCAL_TELEPORT_TIMEOUT_TICKS) {
                     
                     arrivalFirstPerson = createFirstPersonPose(player);
                     arrivalFocus = createFocus(player);
@@ -327,7 +348,8 @@ public final class TeleportCameraController {
 
                     setPhase(Phase.FADE_IN_AND_ORBIT_BACK);
                 } else if (activeNetworkSessionId != null
-                        && phaseTicks >= TELEPORT_TIMEOUT_TICKS * 5) {
+                        && phaseTicks
+                        >= NETWORK_TELEPORT_TIMEOUT_TICKS) {
                     cancel();
                 }
             }
@@ -761,7 +783,15 @@ public final class TeleportCameraController {
                                         * 100.0F
                         );
 
-                final int finalPercentage = Math.round(((float) percentage / requiredPercentage) * 100);
+                final int finalPercentage = MathHelper.clamp(
+                        Math.round(
+                                (float) percentage
+                                        / requiredPercentage
+                                        * 100.0F
+                        ),
+                        0,
+                        100
+                );
 
                 yield Text.translatable(
                         "hud.twilightteleport.loading.chunks",
@@ -1327,6 +1357,7 @@ public final class TeleportCameraController {
         departureFocus = null;
         arrivalFocus = null;
 
+        TeleportLoadingStatusHud.reset();
     }
 
     private static float interpolateDegrees(

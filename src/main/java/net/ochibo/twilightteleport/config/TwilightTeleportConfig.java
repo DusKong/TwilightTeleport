@@ -4,7 +4,7 @@ public final class TwilightTeleportConfig {
 
     private ParticleAmount particleAmount = ParticleAmount.DEFAULT;
     private ShaderPackEffectQuality shaderPackEffectQuality =
-            ShaderPackEffectQuality.HIGH;
+            ShaderPackEffectQuality.MEDIUM;
 
     private boolean soundEnabled = true;
     private boolean letterboxEnabled = true;
@@ -35,7 +35,7 @@ public final class TwilightTeleportConfig {
         }
 
         if (shaderPackEffectQuality == null) {
-            shaderPackEffectQuality = ShaderPackEffectQuality.HIGH;
+            shaderPackEffectQuality = ShaderPackEffectQuality.MEDIUM;
         }
     }
 
@@ -57,7 +57,7 @@ public final class TwilightTeleportConfig {
             ShaderPackEffectQuality shaderPackEffectQuality
     ) {
         this.shaderPackEffectQuality = shaderPackEffectQuality == null
-                ? ShaderPackEffectQuality.HIGH
+                ? ShaderPackEffectQuality.MEDIUM
                 : shaderPackEffectQuality;
     }
 

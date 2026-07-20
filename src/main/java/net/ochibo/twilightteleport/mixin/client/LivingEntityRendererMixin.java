@@ -7,12 +7,9 @@ import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
-import net.minecraft.client.render.entity.feature.ArmorFeatureRenderer;
 import net.minecraft.client.render.entity.feature.FeatureRenderer;
-import net.minecraft.client.render.entity.feature.HeadFeatureRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.ochibo.twilightteleport.client.effect.TeleportEntityEffectManager;
 import net.ochibo.twilightteleport.client.render.TeleportDissolveRenderLayer;
@@ -130,6 +127,11 @@ public abstract class LivingEntityRendererMixin {
         }
 
         if (TeleportShaderPackCompat.isShadowPass()) {
+            if (TeleportEntityEffectManager
+                    .shouldRenderDissolve(player.getUuid())) {
+                cir.setReturnValue(null);
+            }
+
             return;
         }
 
@@ -301,6 +303,13 @@ public abstract class LivingEntityRendererMixin {
                 vertexConsumers;
 
         if (entity instanceof AbstractClientPlayerEntity player
+                && TeleportShaderPackCompat.isShadowPass()
+                && TeleportEntityEffectManager
+                .shouldRenderDissolve(player.getUuid())) {
+            return;
+        }
+
+        if (entity instanceof AbstractClientPlayerEntity player
                 && !TeleportShaderPackCompat.isShadowPass()) {
             boolean wantsDissolve =
                     TeleportEntityEffectManager
@@ -335,22 +344,8 @@ public abstract class LivingEntityRendererMixin {
                 }
             }
 
-            boolean measuresHeadSlot =
-                    TeleportRenderedHeightManager
-                            .isMeasurementActive(
-                                    player.getUuid()
-                            )
-                            && !player.getEquippedStack(
-                            EquipmentSlot.HEAD
-                    ).isEmpty()
-                            && (
-                            featureRenderer
-                                    instanceof ArmorFeatureRenderer
-                                    || featureRenderer
-                                    instanceof HeadFeatureRenderer
-                    );
-
-            if (measuresHeadSlot) {
+            if (TeleportRenderedHeightManager
+                    .isMeasurementActive(player.getUuid())) {
                 selectedProvider =
                         new TeleportHeightMeasuringVertexConsumerProvider(
                                 selectedProvider,

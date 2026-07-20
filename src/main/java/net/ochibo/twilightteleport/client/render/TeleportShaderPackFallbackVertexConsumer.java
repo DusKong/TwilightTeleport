@@ -228,35 +228,37 @@ public final class TeleportShaderPackFallbackVertexConsumer
                         (x + 1)
                                 / (float) quadSubdivisions;
 
-                VertexData cell00 =
-                        bilerp(v00, v10, v11, v01, x0, y0);
-
-                VertexData cell10 =
-                        bilerp(v00, v10, v11, v01, x1, y0);
-
-                VertexData cell11 =
-                        bilerp(v00, v10, v11, v01, x1, y1);
-
-                VertexData cell01 =
-                        bilerp(v00, v10, v11, v01, x0, y1);
-
-                VertexData center =
-                        bilerp(
-                                v00,
-                                v10,
-                                v11,
-                                v01,
-                                (x0 + x1) * 0.5F,
-                                (y0 + y1) * 0.5F
-                        );
+                float centerX = (x0 + x1) * 0.5F;
+                float centerY = (y0 + y1) * 0.5F;
 
                 TeleportDissolveRenderState.FallbackSample sample =
                         TeleportDissolveRenderState
                                 .sampleShaderPackFallback(
                                         playerUuid,
-                                        center.x(),
-                                        center.y(),
-                                        center.z()
+                                        bilerp(
+                                                v00.x(),
+                                                v10.x(),
+                                                v11.x(),
+                                                v01.x(),
+                                                centerX,
+                                                centerY
+                                        ),
+                                        bilerp(
+                                                v00.y(),
+                                                v10.y(),
+                                                v11.y(),
+                                                v01.y(),
+                                                centerX,
+                                                centerY
+                                        ),
+                                        bilerp(
+                                                v00.z(),
+                                                v10.z(),
+                                                v11.z(),
+                                                v01.z(),
+                                                centerX,
+                                                centerY
+                                        )
                                 );
 
                 
@@ -264,19 +266,39 @@ public final class TeleportShaderPackFallbackVertexConsumer
                     continue;
                 }
 
-                emit(cell00, sample);
-                emit(cell10, sample);
-                emit(cell11, sample);
-                emit(cell01, sample);
+                emitInterpolated(
+                        v00, v10, v11, v01, x0, y0, sample
+                );
+                emitInterpolated(
+                        v00, v10, v11, v01, x1, y0, sample
+                );
+                emitInterpolated(
+                        v00, v10, v11, v01, x1, y1, sample
+                );
+                emitInterpolated(
+                        v00, v10, v11, v01, x0, y1, sample
+                );
             }
         }
     }
 
-    private void emit(
-            VertexData vertex,
+    private void emitInterpolated(
+            VertexData v00,
+            VertexData v10,
+            VertexData v11,
+            VertexData v01,
+            float x,
+            float y,
             TeleportDissolveRenderState.FallbackSample sample
     ) {
-        int sourceColor = vertex.color();
+        int sourceColor = bilerpColor(
+                v00.color(),
+                v10.color(),
+                v11.color(),
+                v01.color(),
+                x,
+                y
+        );
 
         int alpha =
                 sourceColor >>> 24;
@@ -309,22 +331,76 @@ public final class TeleportShaderPackFallbackVertexConsumer
                         sample.colorMultiplier()
                 );
 
+        VertexData nearest = nearestVertex(
+                v00,
+                v10,
+                v11,
+                v01,
+                x,
+                y
+        );
+
         delegate.vertex(
-                vertex.x(),
-                vertex.y(),
-                vertex.z(),
+                bilerp(
+                        v00.x(), v10.x(), v11.x(), v01.x(), x, y
+                ),
+                bilerp(
+                        v00.y(), v10.y(), v11.y(), v01.y(), x, y
+                ),
+                bilerp(
+                        v00.z(), v10.z(), v11.z(), v01.z(), x, y
+                ),
                 modifiedColor,
-                vertex.u(),
-                vertex.v(),
-                vertex.overlay(),
-                vertex.light(),
-                vertex.normalX(),
-                vertex.normalY(),
-                vertex.normalZ()
+                bilerp(
+                        v00.u(), v10.u(), v11.u(), v01.u(), x, y
+                ),
+                bilerp(
+                        v00.v(), v10.v(), v11.v(), v01.v(), x, y
+                ),
+                nearest.overlay(),
+                nearest.light(),
+                bilerp(
+                        v00.normalX(),
+                        v10.normalX(),
+                        v11.normalX(),
+                        v01.normalX(),
+                        x,
+                        y
+                ),
+                bilerp(
+                        v00.normalY(),
+                        v10.normalY(),
+                        v11.normalY(),
+                        v01.normalY(),
+                        x,
+                        y
+                ),
+                bilerp(
+                        v00.normalZ(),
+                        v10.normalZ(),
+                        v11.normalZ(),
+                        v01.normalZ(),
+                        x,
+                        y
+                )
         );
     }
 
-    private static VertexData bilerp(
+    private static float bilerp(
+            float v00,
+            float v10,
+            float v11,
+            float v01,
+            float x,
+            float y
+    ) {
+        float top = MathHelper.lerp(x, v00, v10);
+        float bottom = MathHelper.lerp(x, v01, v11);
+
+        return MathHelper.lerp(y, top, bottom);
+    }
+
+    private static VertexData nearestVertex(
             VertexData v00,
             VertexData v10,
             VertexData v11,
@@ -332,96 +408,58 @@ public final class TeleportShaderPackFallbackVertexConsumer
             float x,
             float y
     ) {
-        VertexData top =
-                lerp(v00, v10, x);
+        if (y < 0.5F) {
+            return x < 0.5F ? v00 : v10;
+        }
 
-        VertexData bottom =
-                lerp(v01, v11, x);
-
-        return lerp(top, bottom, y);
+        return x < 0.5F ? v01 : v11;
     }
 
-    private static VertexData lerp(
-            VertexData start,
-            VertexData end,
-            float progress
+    private static int bilerpColor(
+            int v00,
+            int v10,
+            int v11,
+            int v01,
+            float x,
+            float y
     ) {
-        return new VertexData(
-                MathHelper.lerp(progress, start.x(), end.x()),
-                MathHelper.lerp(progress, start.y(), end.y()),
-                MathHelper.lerp(progress, start.z(), end.z()),
-                lerpColor(start.color(), end.color(), progress),
-                MathHelper.lerp(progress, start.u(), end.u()),
-                MathHelper.lerp(progress, start.v(), end.v()),
-                progress < 0.5F
-                        ? start.overlay()
-                        : end.overlay(),
-                progress < 0.5F
-                        ? start.light()
-                        : end.light(),
-                MathHelper.lerp(
-                        progress,
-                        start.normalX(),
-                        end.normalX()
-                ),
-                MathHelper.lerp(
-                        progress,
-                        start.normalY(),
-                        end.normalY()
-                ),
-                MathHelper.lerp(
-                        progress,
-                        start.normalZ(),
-                        end.normalZ()
-                )
+        return bilerpColorComponent(
+                v00, v10, v11, v01, 24, x, y
+        ) << 24
+                | bilerpColorComponent(
+                v00, v10, v11, v01, 16, x, y
+        ) << 16
+                | bilerpColorComponent(
+                v00, v10, v11, v01, 8, x, y
+        ) << 8
+                | bilerpColorComponent(
+                v00, v10, v11, v01, 0, x, y
         );
     }
 
-    private static int lerpColor(
-            int start,
-            int end,
-            float progress
+    private static int bilerpColorComponent(
+            int v00,
+            int v10,
+            int v11,
+            int v01,
+            int shift,
+            float x,
+            float y
     ) {
-        int alpha =
+        return MathHelper.clamp(
                 Math.round(
-                        MathHelper.lerp(
-                                progress,
-                                start >>> 24,
-                                end >>> 24
+                        bilerp(
+                                v00 >>> shift & 0xFF,
+                                v10 >>> shift & 0xFF,
+                                v11 >>> shift & 0xFF,
+                                v01 >>> shift & 0xFF,
+                                x,
+                                y
                         )
-                );
-
-        int red =
-                Math.round(
-                        MathHelper.lerp(
-                                progress,
-                                start >>> 16 & 0xFF,
-                                end >>> 16 & 0xFF
-                        )
-                );
-
-        int green =
-                Math.round(
-                        MathHelper.lerp(
-                                progress,
-                                start >>> 8 & 0xFF,
-                                end >>> 8 & 0xFF
-                        )
-                );
-
-        int blue =
-                Math.round(
-                        MathHelper.lerp(
-                                progress,
-                                start & 0xFF,
-                                end & 0xFF
-                        )
-                );
-
-        return alpha << 24
-                | red << 16
-                | green << 8
-                | blue;
+                ),
+                0,
+                255
+        );
     }
 
     private static int multiplyColor(

@@ -34,20 +34,11 @@ public record TeleportClientStatePayload(
 
     private void write(RegistryByteBuf buf) {
         buf.writeUuid(sessionId);
-        buf.writeVarInt(state.ordinal());
+        buf.writeVarInt(state.wireId());
     }
 
     private static TeleportClientState readState(RegistryByteBuf buf) {
-        int ordinal = buf.readVarInt();
-        TeleportClientState[] values = TeleportClientState.values();
-
-        if (ordinal < 0 || ordinal >= values.length) {
-            throw new IllegalArgumentException(
-                    "Unknown teleport client state: " + ordinal
-            );
-        }
-
-        return values[ordinal];
+        return TeleportClientState.fromWireId(buf.readVarInt());
     }
 
     @Override

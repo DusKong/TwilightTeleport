@@ -43,23 +43,14 @@ public record TeleportEffectPayload(
     private void write(RegistryByteBuf buf) {
         buf.writeUuid(sessionId);
         buf.writeUuid(playerUuid);
-        buf.writeVarInt(action.ordinal());
+        buf.writeVarInt(action.wireId());
         buf.writeVarInt(Math.max(0, delayTicks));
         buf.writeVarInt(Math.max(0, durationTicks));
         buf.writeVarInt(Math.max(0, elapsedTicks));
     }
 
     private static TeleportEffectAction readAction(RegistryByteBuf buf) {
-        int ordinal = buf.readVarInt();
-        TeleportEffectAction[] values = TeleportEffectAction.values();
-
-        if (ordinal < 0 || ordinal >= values.length) {
-            throw new IllegalArgumentException(
-                    "Unknown teleport effect action: " + ordinal
-            );
-        }
-
-        return values[ordinal];
+        return TeleportEffectAction.fromWireId(buf.readVarInt());
     }
 
     @Override

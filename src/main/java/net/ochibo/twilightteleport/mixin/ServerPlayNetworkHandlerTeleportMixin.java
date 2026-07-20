@@ -37,27 +37,61 @@ public abstract class ServerPlayNetworkHandlerTeleportMixin {
         ServerPlayNetworkHandler handler =
                 (ServerPlayNetworkHandler) (Object) this;
 
-        
+        Set<PositionFlag> copiedFlags = Set.copyOf(flags);
+
+        double resolvedX = resolveCoordinate(
+                player.getX(),
+                destinationX,
+                copiedFlags,
+                PositionFlag.X
+        );
+        double resolvedY = resolveCoordinate(
+                player.getY(),
+                destinationY,
+                copiedFlags,
+                PositionFlag.Y
+        );
+        double resolvedZ = resolveCoordinate(
+                player.getZ(),
+                destinationZ,
+                copiedFlags,
+                PositionFlag.Z
+        );
+
         boolean intercepted =
                 PendingTeleportManager
                         .interceptExternalTeleport(
                                 player,
                                 player.getServerWorld(),
-                                destinationX,
-                                destinationY,
-                                destinationZ,
-                                () -> handler.requestTeleport(
-                                        destinationX,
-                                        destinationY,
-                                        destinationZ,
-                                        yaw,
-                                        pitch,
-                                        Set.of()
-                                )
+                                resolvedX,
+                                resolvedY,
+                                resolvedZ,
+                                () -> {
+                                    handler.requestTeleport(
+                                            destinationX,
+                                            destinationY,
+                                            destinationZ,
+                                            yaw,
+                                            pitch,
+                                            copiedFlags
+                                    );
+                                    return true;
+                                }
                         );
 
         if (intercepted) {
             ci.cancel();
         }
+    }
+
+    private static double resolveCoordinate(
+            double current,
+            double requested,
+            Set<PositionFlag> flags,
+            PositionFlag coordinateFlag
+    ) {
+        return flags.contains(coordinateFlag)
+                ? current + requested
+                : requested;
     }
 }

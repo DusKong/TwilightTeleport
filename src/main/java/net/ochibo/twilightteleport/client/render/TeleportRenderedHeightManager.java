@@ -47,21 +47,7 @@ public final class TeleportRenderedHeightManager {
     private static final int MAX_MESH_POINTS = 4096;
     private static final float MESH_POINT_QUANTIZATION = 64.0F;
 
-    
-    private static final Map<UUID, Float> MEASURED_HEIGHTS =
-            new ConcurrentHashMap<>();
-
-    private static final Map<UUID, ItemStack> MEASURED_HEAD_STACKS =
-            new ConcurrentHashMap<>();
-
-    private static final Map<UUID, List<MeshPoint>> MEASURED_MESH_POINTS =
-            new ConcurrentHashMap<>();
-
-    
     private static final Map<UUID, Float> EFFECT_HEIGHTS =
-            new ConcurrentHashMap<>();
-
-    private static final Map<UUID, ItemStack> EFFECT_HEAD_STACKS =
             new ConcurrentHashMap<>();
 
     private static final Map<UUID, List<MeshPoint>> EFFECT_MESH_POINTS =
@@ -82,8 +68,8 @@ public final class TeleportRenderedHeightManager {
     private static final Set<UUID> EFFECT_CAPTURE_REQUESTS =
             ConcurrentHashMap.newKeySet();
 
-    private static final Map<UUID, PendingSnapshot> PENDING_EFFECT_SNAPSHOTS =
-            new ConcurrentHashMap<>();
+    private static final Set<UUID> PENDING_EFFECT_CAPTURES =
+            ConcurrentHashMap.newKeySet();
 
     private static final Map<Item, Float> ITEM_EXTRA_HEIGHT_OVERRIDES =
             new ConcurrentHashMap<>();
@@ -107,16 +93,15 @@ public final class TeleportRenderedHeightManager {
                 && (
                 EFFECT_HEIGHTS.containsKey(playerUuid)
                         || EFFECT_CAPTURE_REQUESTS.contains(playerUuid)
-                        || PENDING_EFFECT_SNAPSHOTS.containsKey(playerUuid)
+                        || PENDING_EFFECT_CAPTURES.contains(playerUuid)
         )) {
             return;
         }
 
-        clearMeasured(playerUuid);
         clearEffectSnapshotOnly(playerUuid);
 
         ACTIVE_MEASUREMENTS.remove(playerUuid);
-        PENDING_EFFECT_SNAPSHOTS.remove(playerUuid);
+        PENDING_EFFECT_CAPTURES.remove(playerUuid);
         CAPTURE_FAILURE_COUNTS.remove(playerUuid);
 
         if (sessionId != null) {
@@ -146,7 +131,7 @@ public final class TeleportRenderedHeightManager {
         }
 
         if (!EFFECT_CAPTURE_REQUESTS.contains(playerUuid)
-                && !PENDING_EFFECT_SNAPSHOTS.containsKey(playerUuid)) {
+                && !PENDING_EFFECT_CAPTURES.contains(playerUuid)) {
             ACTIVE_MEASUREMENTS.remove(playerUuid);
             return;
         }
@@ -233,7 +218,7 @@ public final class TeleportRenderedHeightManager {
         }
 
         if (!EFFECT_CAPTURE_REQUESTS.contains(playerUuid)
-                && !PENDING_EFFECT_SNAPSHOTS.containsKey(playerUuid)) {
+                && !PENDING_EFFECT_CAPTURES.contains(playerUuid)) {
             return;
         }
 
@@ -245,12 +230,7 @@ public final class TeleportRenderedHeightManager {
                 measurement.headStack(),
                 currentHeadStack
         )) {
-            clearMeasured(playerUuid);
-
-            PENDING_EFFECT_SNAPSHOTS.put(
-                    playerUuid,
-                    new PendingSnapshot(currentHeadStack)
-            );
+            PENDING_EFFECT_CAPTURES.add(playerUuid);
 
             EFFECT_CAPTURE_REQUESTS.add(playerUuid);
             return;
@@ -292,8 +272,6 @@ public final class TeleportRenderedHeightManager {
         }
 
         if (invalidMeasurement) {
-            clearMeasured(playerUuid);
-
             int failedAttempts =
                     CAPTURE_FAILURE_COUNTS.merge(
                             playerUuid,
@@ -303,10 +281,7 @@ public final class TeleportRenderedHeightManager {
 
             
             if (failedAttempts < MAX_INITIAL_CAPTURE_ATTEMPTS) {
-                PENDING_EFFECT_SNAPSHOTS.put(
-                        playerUuid,
-                        new PendingSnapshot(currentHeadStack)
-                );
+                PENDING_EFFECT_CAPTURES.add(playerUuid);
                 EFFECT_CAPTURE_REQUESTS.add(playerUuid);
                 return;
             }
@@ -316,7 +291,6 @@ public final class TeleportRenderedHeightManager {
             
             commitEffectSnapshot(
                     playerUuid,
-                    currentHeadStack,
                     fallbackHeight,
                     List.of(),
                     measurement.renderYaw()
@@ -334,16 +308,8 @@ public final class TeleportRenderedHeightManager {
 
         CAPTURE_FAILURE_COUNTS.remove(playerUuid);
 
-        storeMeasuredSnapshot(
-                playerUuid,
-                currentHeadStack,
-                measuredHeight,
-                measuredMeshPoints
-        );
-
         commitEffectSnapshot(
                 playerUuid,
-                currentHeadStack,
                 measuredHeight,
                 measuredMeshPoints,
                 measurement.renderYaw()
@@ -606,12 +572,7 @@ public final class TeleportRenderedHeightManager {
 
         EFFECT_CAPTURE_REQUESTS.add(playerUuid);
 
-        PENDING_EFFECT_SNAPSHOTS.computeIfAbsent(
-                playerUuid,
-                uuid -> new PendingSnapshot(
-                        copyHeadStack(player)
-                )
-        );
+        PENDING_EFFECT_CAPTURES.add(playerUuid);
 
         return false;
     }
@@ -642,7 +603,7 @@ public final class TeleportRenderedHeightManager {
 
         ACTIVE_MEASUREMENTS.remove(playerUuid);
         EFFECT_CAPTURE_REQUESTS.remove(playerUuid);
-        PENDING_EFFECT_SNAPSHOTS.remove(playerUuid);
+        PENDING_EFFECT_CAPTURES.remove(playerUuid);
         EFFECT_SESSION_IDS.remove(playerUuid);
         EFFECT_CAPTURE_YAWS.remove(playerUuid);
         CAPTURE_FAILURE_COUNTS.remove(playerUuid);
@@ -651,19 +612,14 @@ public final class TeleportRenderedHeightManager {
     public static void clearAll() {
         ACTIVE_MEASUREMENTS.clear();
 
-        MEASURED_HEIGHTS.clear();
-        MEASURED_HEAD_STACKS.clear();
-        MEASURED_MESH_POINTS.clear();
-
         EFFECT_HEIGHTS.clear();
-        EFFECT_HEAD_STACKS.clear();
         EFFECT_MESH_POINTS.clear();
         EFFECT_CAPTURE_YAWS.clear();
         EFFECT_SESSION_IDS.clear();
         CAPTURE_FAILURE_COUNTS.clear();
 
         EFFECT_CAPTURE_REQUESTS.clear();
-        PENDING_EFFECT_SNAPSHOTS.clear();
+        PENDING_EFFECT_CAPTURES.clear();
     }
 
     private static float getSafeFallbackHeight(
@@ -685,31 +641,8 @@ public final class TeleportRenderedHeightManager {
         );
     }
 
-    private static void storeMeasuredSnapshot(
-            UUID playerUuid,
-            ItemStack headStack,
-            float height,
-            List<MeshPoint> meshPoints
-    ) {
-        MEASURED_HEIGHTS.put(
-                playerUuid,
-                height
-        );
-
-        MEASURED_HEAD_STACKS.put(
-                playerUuid,
-                headStack.copy()
-        );
-
-        MEASURED_MESH_POINTS.put(
-                playerUuid,
-                List.copyOf(meshPoints)
-        );
-    }
-
     private static void commitEffectSnapshot(
             UUID playerUuid,
-            ItemStack headStack,
             float height,
             List<MeshPoint> meshPoints,
             float captureYaw
@@ -717,11 +650,6 @@ public final class TeleportRenderedHeightManager {
         EFFECT_HEIGHTS.put(
                 playerUuid,
                 height
-        );
-
-        EFFECT_HEAD_STACKS.put(
-                playerUuid,
-                headStack.copy()
         );
 
         EFFECT_MESH_POINTS.put(
@@ -737,23 +665,14 @@ public final class TeleportRenderedHeightManager {
         );
 
         EFFECT_CAPTURE_REQUESTS.remove(playerUuid);
-        PENDING_EFFECT_SNAPSHOTS.remove(playerUuid);
+        PENDING_EFFECT_CAPTURES.remove(playerUuid);
         ACTIVE_MEASUREMENTS.remove(playerUuid);
-    }
-
-    private static void clearMeasured(
-            UUID playerUuid
-    ) {
-        MEASURED_HEIGHTS.remove(playerUuid);
-        MEASURED_HEAD_STACKS.remove(playerUuid);
-        MEASURED_MESH_POINTS.remove(playerUuid);
     }
 
     private static void clearEffectSnapshotOnly(
             UUID playerUuid
     ) {
         EFFECT_HEIGHTS.remove(playerUuid);
-        EFFECT_HEAD_STACKS.remove(playerUuid);
         EFFECT_MESH_POINTS.remove(playerUuid);
         EFFECT_CAPTURE_YAWS.remove(playerUuid);
     }
@@ -1003,21 +922,6 @@ public final class TeleportRenderedHeightManager {
 
         private float renderYaw() {
             return renderYaw;
-        }
-    }
-
-    private static final class PendingSnapshot {
-        private final ItemStack headStack;
-
-        private PendingSnapshot(
-                ItemStack headStack
-        ) {
-            this.headStack = headStack.copy();
-        }
-
-        @SuppressWarnings("unused")
-        private ItemStack headStack() {
-            return headStack;
         }
     }
 
