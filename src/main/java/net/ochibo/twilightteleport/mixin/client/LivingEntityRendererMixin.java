@@ -1,16 +1,19 @@
 package net.ochibo.twilightteleport.mixin.client;
 
-import net.minecraft.client.MinecraftClient;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.entity.LivingEntityRenderer;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.client.render.entity.feature.FeatureRenderer;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.ochibo.twilightteleport.client.effect.TeleportEntityEffectManager;
 import net.ochibo.twilightteleport.client.render.TeleportDissolveRenderLayer;
 import net.ochibo.twilightteleport.client.render.TeleportDissolveRenderState;
@@ -28,7 +31,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntityRenderer.class)
-public abstract class LivingEntityRendererMixin {
+public abstract class LivingEntityRendererMixin<
+            T extends LivingEntity,
+            S extends LivingEntityRenderState
+        > {
+
+    @Inject(
+            method = "setupRotations",
+            at = @At("HEAD")
+    )
+    private void twilightTeleport$captureActualBodyYaw(
+            S state, PoseStack poseStack, float bodyRot, float entityScale, CallbackInfo ci
+    ) {
+        if (state.)
+    }
 
     @Inject(
             method =
@@ -73,11 +89,11 @@ public abstract class LivingEntityRendererMixin {
             float scale,
             CallbackInfo ci
     ) {
-        if (entity instanceof AbstractClientPlayerEntity player
+        if (entity instanceof AbstractClientPlayer player
                 && TeleportRenderedHeightManager
-                .isMeasurementActive(player.getUuid())) {
+                .isMeasurementActive(player.getUUID())) {
             TeleportRenderedHeightManager.updateMeasurementRenderYaw(
-                    player.getUuid(),
+                    player.getUUID(),
                     bodyYaw
             );
         }
@@ -100,7 +116,7 @@ public abstract class LivingEntityRendererMixin {
             int light,
             CallbackInfo ci
     ) {
-        if (entity instanceof AbstractClientPlayerEntity player) {
+        if (entity instanceof AbstractClientPlayer player) {
             TeleportRenderedHeightManager.endPlayerRender(player);
         }
     }
@@ -122,13 +138,13 @@ public abstract class LivingEntityRendererMixin {
             CallbackInfoReturnable<RenderLayer> cir
     ) {
         if (!(entity
-                instanceof AbstractClientPlayerEntity player)) {
+                instanceof AbstractClientPlayer player)) {
             return;
         }
 
         if (TeleportShaderPackCompat.isShadowPass()) {
             if (TeleportEntityEffectManager
-                    .shouldRenderDissolve(player.getUuid())) {
+                    .shouldRenderDissolve(player.getUUID())) {
                 cir.setReturnValue(null);
             }
 
@@ -136,7 +152,7 @@ public abstract class LivingEntityRendererMixin {
         }
 
         if (!TeleportEntityEffectManager
-                .shouldRenderDissolve(player.getUuid())) {
+                .shouldRenderDissolve(player.getUUID())) {
             return;
         }
 
@@ -150,8 +166,8 @@ public abstract class LivingEntityRendererMixin {
             return;
         }
 
-        MinecraftClient client =
-                MinecraftClient.getInstance();
+        Minecraft client =
+                Minecraft.getInstance();
 
         float tickDelta =
                 client.getRenderTickCounter()
@@ -170,7 +186,7 @@ public abstract class LivingEntityRendererMixin {
 
         cir.setReturnValue(
                 TeleportDissolveRenderLayer.get(
-                        player.getUuid(),
+                        player.getUUID(),
                         playerRenderer.getTexture(player)
                 )
         );
@@ -206,7 +222,7 @@ public abstract class LivingEntityRendererMixin {
                 provider.getBuffer(layer);
 
         if (!(entity
-                instanceof AbstractClientPlayerEntity player)) {
+                instanceof AbstractClientPlayer player)) {
             return originalConsumer;
         }
 
@@ -218,11 +234,11 @@ public abstract class LivingEntityRendererMixin {
         VertexConsumer measuringConsumer =
                 TeleportRenderedHeightManager
                         .isMeasurementActive(
-                                player.getUuid()
+                                player.getUUID()
                         )
                         ? TeleportHeightMeasuringVertexConsumerProvider.wrap(
                         originalConsumer,
-                        player.getUuid()
+                        player.getUUID()
                 )
                         : originalConsumer;
 
@@ -233,7 +249,7 @@ public abstract class LivingEntityRendererMixin {
 
         if (!TeleportEntityEffectManager
                 .shouldRenderDissolve(
-                        player.getUuid()
+                        player.getUUID()
                 )) {
             return measuringConsumer;
         }
@@ -253,14 +269,14 @@ public abstract class LivingEntityRendererMixin {
         VertexConsumer shaderPackFallback =
                 new TeleportShaderPackFallbackVertexConsumer(
                         originalConsumer,
-                        player.getUuid()
+                        player.getUUID()
                 );
 
         return TeleportRenderedHeightManager
-                .isMeasurementActive(player.getUuid())
+                .isMeasurementActive(player.getUUID())
                 ? TeleportHeightMeasuringVertexConsumerProvider.wrap(
                 shaderPackFallback,
-                player.getUuid()
+                player.getUUID()
         )
                 : shaderPackFallback;
     }
@@ -302,19 +318,19 @@ public abstract class LivingEntityRendererMixin {
         VertexConsumerProvider selectedProvider =
                 vertexConsumers;
 
-        if (entity instanceof AbstractClientPlayerEntity player
+        if (entity instanceof AbstractClientPlayer player
                 && TeleportShaderPackCompat.isShadowPass()
                 && TeleportEntityEffectManager
-                .shouldRenderDissolve(player.getUuid())) {
+                .shouldRenderDissolve(player.getUUID())) {
             return;
         }
 
-        if (entity instanceof AbstractClientPlayerEntity player
+        if (entity instanceof AbstractClientPlayer player
                 && !TeleportShaderPackCompat.isShadowPass()) {
             boolean wantsDissolve =
                     TeleportEntityEffectManager
                             .shouldRenderDissolve(
-                                    player.getUuid()
+                                    player.getUUID()
                             );
 
             boolean snapshotReady =
@@ -333,23 +349,23 @@ public abstract class LivingEntityRendererMixin {
                     selectedProvider =
                             new TeleportShaderPackFallbackVertexConsumerProvider(
                                     selectedProvider,
-                                    player.getUuid()
+                                    player.getUUID()
                             );
                 } else {
                     selectedProvider =
                             new TeleportDissolveVertexConsumerProvider(
                                     selectedProvider,
-                                    player.getUuid()
+                                    player.getUUID()
                             );
                 }
             }
 
             if (TeleportRenderedHeightManager
-                    .isMeasurementActive(player.getUuid())) {
+                    .isMeasurementActive(player.getUUID())) {
                 selectedProvider =
                         new TeleportHeightMeasuringVertexConsumerProvider(
                                 selectedProvider,
-                                player.getUuid()
+                                player.getUUID()
                         );
             }
         }
@@ -380,9 +396,9 @@ public abstract class LivingEntityRendererMixin {
             LivingEntity entity,
             CallbackInfoReturnable<Float> cir
     ) {
-        if (entity instanceof AbstractClientPlayerEntity player
+        if (entity instanceof AbstractClientPlayer player
                 && TeleportEntityEffectManager
-                .shouldRenderDissolve(player.getUuid())) {
+                .shouldRenderDissolve(player.getUUID())) {
             cir.setReturnValue(0.0F);
         }
     }

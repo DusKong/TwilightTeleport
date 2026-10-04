@@ -1,19 +1,30 @@
 package net.ochibo.twilightteleport.client.render;
 
-import net.minecraft.client.MinecraftClient;
+import com.mojang.blaze3d.opengl.Uniform;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gl.GlUniform;
 import net.minecraft.client.gl.ShaderProgram;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.ShaderManager;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.phys.Vec3;
 import net.ochibo.twilightteleport.TeleportTimings;
+import net.ochibo.twilightteleport.TwilightTeleport;
 import net.ochibo.twilightteleport.client.effect.TeleportEntityEffectManager;
+import org.joml.Matrix3f;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class TeleportDissolveRenderState {
+    private static final Matrix3f IDENTITY_POSITION_TRANSFORM = new Matrix3f();
+
     private static final float NOISE_SCALE = 0.1F;
     private static final float NOISE_STRENGTH = 0.18F;
     private static final float EDGE_WIDTH = 0.3F;
@@ -42,26 +53,30 @@ public final class TeleportDissolveRenderState {
     private static final Map<UUID, PreparedState> STATES =
             new ConcurrentHashMap<>();
 
+    private static Identifier PROGRAM_DISSOLVE_PROGRESS = TwilightTeleport.id("DissolveProgress");
+
+
+
     private TeleportDissolveRenderState() {
     }
 
     public static void prepare(
-            AbstractClientPlayerEntity player,
+            AbstractClientPlayer player,
             float tickDelta
     ) {
-        MinecraftClient client =
-                MinecraftClient.getInstance();
+        Minecraft client =
+                Minecraft.getInstance();
 
-        Vec3d cameraPosition =
+        Vec3 cameraPosition =
                 client.gameRenderer
-                        .getCamera()
-                        .getPos();
+                        .mainCamera()
+                        .position();
 
-        Vec3d playerPosition =
-                player.getLerpedPos(tickDelta);
+        Vec3 playerPosition =
+                player.getPosition(tickDelta);
 
         UUID playerUuid =
-                player.getUuid();
+                player.getUUID();
 
         boolean rebuilding =
                 TeleportEntityEffectManager
@@ -86,7 +101,7 @@ public final class TeleportDissolveRenderState {
                         TeleportRenderedHeightManager
                                 .getEffectHeight(player)
                                 + 0.05F,
-                        (player.age + tickDelta)
+                        (player.tickCount + tickDelta)
                                 / 20.0F,
                         playerPosition.subtract(
                                 cameraPosition
@@ -100,7 +115,7 @@ public final class TeleportDissolveRenderState {
     }
 
     public static void uploadUniforms(UUID playerUuid) {
-        ShaderProgram program =
+        ShaderManager program =
                 TeleportDissolveShaders.getProgram();
 
         if (program == null) {
@@ -114,7 +129,7 @@ public final class TeleportDissolveRenderState {
                     0.0F,
                     1.8F,
                     0.0F,
-                    Vec3d.ZERO,
+                    Vec3.ZERO,
                     0.0F,
                     0.0F
             );
@@ -123,12 +138,13 @@ public final class TeleportDissolveRenderState {
         setFloat(program, "DissolveProgress", state.progress());
 
         setVec3(
-                program,
-                "EntityOrigin",
+                PROGRAM_DISSOLVE_PROGRESS,
                 (float) state.origin().x,
                 (float) state.origin().y,
                 (float) state.origin().z
         );
+
+
 
         setFloat(program, "EntityHeight", state.height());
         setFloat(program, "EffectTime", state.effectTime());
@@ -217,15 +233,15 @@ public final class TeleportDissolveRenderState {
                 );
 
         float height01 =
-                MathHelper.clamp(
+                Mth.clamp(
                         relativeY / safeHeight,
                         0.0F,
                         1.0F
                 );
 
         float threshold =
-                MathHelper.lerp(
-                        MathHelper.clamp(
+                Mth.lerp(
+                        Mth.clamp(
                                 state.progress(),
                                 0.0F,
                                 1.0F
@@ -307,22 +323,22 @@ public final class TeleportDissolveRenderState {
             float effectTime
     ) {
         int cellX =
-                MathHelper.floor(
+                Mth.floor(
                         x * IRIS_BLOCK_NOISE_SCALE
                 );
 
         int cellY =
-                MathHelper.floor(
+                Mth.floor(
                         y * IRIS_BLOCK_NOISE_SCALE
                 );
 
         int cellZ =
-                MathHelper.floor(
+                Mth.floor(
                         z * IRIS_BLOCK_NOISE_SCALE
                 );
 
         int timeStep =
-                MathHelper.floor(
+                Mth.floor(
                         effectTime
                                 * REBUILD_BLOCK_SPEED
                 );
@@ -357,7 +373,7 @@ public final class TeleportDissolveRenderState {
         }
 
         float x =
-                MathHelper.clamp(
+                Mth.clamp(
                         (value - edge0)
                                 / (edge1 - edge0),
                         0.0F,
@@ -374,11 +390,11 @@ public final class TeleportDissolveRenderState {
     }
 
     private static void setFloat(
-            ShaderProgram program,
+            ShaderManager program,
             String name,
             float value
     ) {
-        GlUniform uniform = program.getUniform(name);
+        Uniform uniform = program.getUniform(name);
 
         if (uniform != null) {
             uniform.set(value);
@@ -386,17 +402,31 @@ public final class TeleportDissolveRenderState {
     }
 
     private static void setVec3(
-            ShaderProgram program,
-            String name,
+            ShaderManager program,
+            Identifier identifier,
             float x,
             float y,
             float z
     ) {
-        GlUniform uniform = program.getUniform(name);
+        program.getPostChain(identifier, Set.of())
+                .
+        Uniform uniform = program.getUniform(name);
 
         if (uniform != null) {
             uniform.set(x, y, z);
         }
+    }
+
+    private static void setPositionTransform(
+            ShaderInstance program
+    ) {
+        Uniform uniform = program.getUniform("PositionTransform");
+
+        if(uniform == null) {
+            return;
+        }
+
+        uniform.set(IDENTITY_POSITION_TRANSFORM);
     }
 
     public record FallbackSample(
@@ -426,7 +456,7 @@ public final class TeleportDissolveRenderState {
             float progress,
             float height,
             float effectTime,
-            Vec3d origin,
+            Vec3 origin,
             float rebuilding,
             float rebuildMeshStarted
     ) {

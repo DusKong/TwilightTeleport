@@ -1,9 +1,10 @@
 package net.ochibo.twilightteleport.client.render;
 
-import net.minecraft.client.render.RenderLayer;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.render.RenderPhase;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.util.Identifier;
 
 import java.util.Map;
@@ -12,18 +13,18 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public final class TeleportDissolveRenderLayer
-        extends RenderLayer {
+        extends RenderType {
 
-    private static final Map<SkinLayerKey, RenderLayer> SKIN_CACHE =
+    private static final Map<SkinLayerKey, RenderType> SKIN_CACHE =
             new ConcurrentHashMap<>();
 
-    private static final Map<WrappedLayerKey, RenderLayer> WRAPPED_CACHE =
+    private static final Map<WrappedLayerKey, RenderType> WRAPPED_CACHE =
             new ConcurrentHashMap<>();
 
     private TeleportDissolveRenderLayer(
             String name,
             VertexFormat vertexFormat,
-            VertexFormat.DrawMode drawMode,
+            VertexFormat drawMode,
             int expectedBufferSize,
             boolean hasCrumbling,
             boolean translucent,
@@ -42,7 +43,7 @@ public final class TeleportDissolveRenderLayer
     }
 
     
-    public static RenderLayer get(
+    public static RenderType get(
             UUID playerUuid,
             Identifier texture
     ) {
@@ -56,9 +57,9 @@ public final class TeleportDissolveRenderLayer
     }
 
     
-    public static RenderLayer wrap(
+    public static RenderType wrap(
             UUID playerUuid,
-            RenderLayer originalLayer
+            RenderType originalLayer
     ) {
         if (originalLayer instanceof TeleportDissolveRenderLayer) {
             return originalLayer;
@@ -86,7 +87,7 @@ public final class TeleportDissolveRenderLayer
         );
     }
 
-    private static RenderLayer createSkinLayer(
+    private static RenderType createSkinLayer(
             SkinLayerKey key
     ) {
         LayerActions actions =
@@ -97,19 +98,19 @@ public final class TeleportDissolveRenderLayer
                         + key.playerUuid()
                         + "_"
                         + key.texture(),
-                VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL,
+                DefaultVertexFormat.ENTITY,
                 VertexFormat.DrawMode.QUADS,
-                DEFAULT_BUFFER_SIZE,
+                TRANSIENT_BUFFER_SIZE,
                 false,
                 false,
                 actions
         );
     }
 
-    private static RenderLayer createWrappedLayer(
+    private static RenderType createWrappedLayer(
             WrappedLayerKey key
     ) {
-        RenderLayer original = key.originalLayer();
+        RenderType original = key.originalLayer();
 
         LayerActions actions =
                 createWrappedActions(key);
@@ -121,11 +122,11 @@ public final class TeleportDissolveRenderLayer
                         + Integer.toHexString(
                         System.identityHashCode(original)
                 ),
-                original.getVertexFormat(),
+                original.format(),
                 original.getDrawMode(),
                 original.getExpectedBufferSize(),
-                original.hasCrumbling(),
-                original.isTranslucent(),
+                original.affectsCrumbling(),
+                original.sortOnUpload(),
                 actions
         );
     }
@@ -180,7 +181,7 @@ public final class TeleportDissolveRenderLayer
     private static LayerActions createWrappedActions(
             WrappedLayerKey key
     ) {
-        RenderLayer original = key.originalLayer();
+        RenderType original = key.originalLayer();
 
         ShaderProgram shaderPhase =
                 new ShaderProgram(
@@ -233,7 +234,7 @@ public final class TeleportDissolveRenderLayer
     
     private record WrappedLayerKey(
             UUID playerUuid,
-            RenderLayer originalLayer
+            RenderType originalLayer
     ) {
     }
 

@@ -1,8 +1,6 @@
 package net.ochibo.twilightteleport.mixin.client;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.client.gui.Gui;
 import net.ochibo.twilightteleport.TeleportCameraController;
 import net.ochibo.twilightteleport.client.hud.TeleportLoadingStatusHud;
 import net.ochibo.twilightteleport.client.render.TeleportOverlayRenderer;
@@ -11,10 +9,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(InGameHud.class)
+@Mixin(Gui.class)
 public abstract class InGameHudMixin {
 
-    @Inject(
+    /*@Inject(
             method = "render",
             at = @At("HEAD"),
             cancellable = true
@@ -42,5 +40,5 @@ public abstract class InGameHudMixin {
 
         
         ci.cancel();
-    }
+    }*/
 }

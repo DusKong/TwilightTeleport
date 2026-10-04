@@ -1,9 +1,11 @@
 package net.ochibo.twilightteleport.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.ochibo.twilightteleport.TwilightTeleport;
 
 import java.util.UUID;
@@ -15,24 +17,30 @@ public record TeleportEffectPayload(
         int delayTicks,
         int durationTicks,
         int elapsedTicks
-) implements CustomPayload {
+) implements CustomPacketPayload {
 
-    public static final Id<TeleportEffectPayload> ID =
-            new Id<>(Identifier.of(
-                    TwilightTeleport.MOD_ID,
-                    "teleport_effect"
-            ));
+    public static final Type<TeleportEffectPayload> TYPE =
+            new Type<>(TwilightTeleport.id("teleport_effect"));
 
-    public static final PacketCodec<RegistryByteBuf, TeleportEffectPayload> CODEC =
-            PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, TeleportEffectPayload> CODEC =
+            StreamCodec.ofMember(
                     TeleportEffectPayload::write,
-                    TeleportEffectPayload::new
+                    TeleportEffectPayload::read
             );
 
-    private TeleportEffectPayload(RegistryByteBuf buf) {
-        this(
-                buf.readUuid(),
-                buf.readUuid(),
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeUUID(sessionId);
+        buf.writeUUID(playerUuid);
+        buf.writeVarInt(action.wireId());
+        buf.writeVarInt(Math.max(0, delayTicks));
+        buf.writeVarInt(Math.max(0, durationTicks));
+        buf.writeVarInt(Math.max(0, elapsedTicks));
+    }
+
+    private static TeleportEffectPayload read(RegistryFriendlyByteBuf buf) {
+        return new TeleportEffectPayload(
+                buf.readUUID(),
+                buf.readUUID(),
                 readAction(buf),
                 buf.readVarInt(),
                 buf.readVarInt(),
@@ -40,21 +48,12 @@ public record TeleportEffectPayload(
         );
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeUuid(sessionId);
-        buf.writeUuid(playerUuid);
-        buf.writeVarInt(action.wireId());
-        buf.writeVarInt(Math.max(0, delayTicks));
-        buf.writeVarInt(Math.max(0, durationTicks));
-        buf.writeVarInt(Math.max(0, elapsedTicks));
-    }
-
-    private static TeleportEffectAction readAction(RegistryByteBuf buf) {
+    private static TeleportEffectAction readAction(RegistryFriendlyByteBuf buf) {
         return TeleportEffectAction.fromWireId(buf.readVarInt());
     }
 
     @Override
-    public Id<? extends CustomPayload> getId() {
-        return ID;
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

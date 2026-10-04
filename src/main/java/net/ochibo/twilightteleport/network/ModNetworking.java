@@ -10,19 +10,19 @@ public final class ModNetworking {
     }
 
     public static void register() {
-        PayloadTypeRegistry.playS2C().register(
-                TeleportEffectPayload.ID,
+        PayloadTypeRegistry.serverboundPlay().register(
+                TeleportEffectPayload.TYPE,
                 TeleportEffectPayload.CODEC
         );
 
-        PayloadTypeRegistry.playC2S().register(
-                TeleportClientStatePayload.ID,
+        PayloadTypeRegistry.clientboundPlay().register(
+                TeleportClientStatePayload.TYPE,
                 TeleportClientStatePayload.CODEC
         );
 
 
         ServerPlayNetworking.registerGlobalReceiver(
-                TeleportClientStatePayload.ID,
+                TeleportClientStatePayload.TYPE,
                 (payload, context) ->
                         PendingTeleportManager.handleClientState(
                                 context.player(),

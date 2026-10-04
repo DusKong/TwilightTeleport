@@ -1,6 +1,8 @@
 package net.ochibo.twilightteleport;
 
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import net.ochibo.twilightteleport.network.ModNetworking;
@@ -15,5 +17,9 @@ public class TwilightTeleport implements ModInitializer {
         ModParticles.register();
         ModNetworking.register();
         PendingTeleportManager.register();
+    }
+
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 }

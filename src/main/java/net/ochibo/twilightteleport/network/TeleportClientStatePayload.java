@@ -1,9 +1,9 @@
 package net.ochibo.twilightteleport.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 import net.ochibo.twilightteleport.TwilightTeleport;
 
 import java.util.UUID;
@@ -11,38 +11,35 @@ import java.util.UUID;
 public record TeleportClientStatePayload(
         UUID sessionId,
         TeleportClientState state
-) implements CustomPayload {
+) implements CustomPacketPayload {
 
-    public static final Id<TeleportClientStatePayload> ID =
-            new Id<>(Identifier.of(
-                    TwilightTeleport.MOD_ID,
-                    "teleport_client_state"
-            ));
+    public static final Type<TeleportClientStatePayload> TYPE =
+            new Type<>(TwilightTeleport.id("teleport_client_state"));
 
-    public static final PacketCodec<RegistryByteBuf, TeleportClientStatePayload> CODEC =
-            PacketCodec.of(
+    public static final StreamCodec<RegistryFriendlyByteBuf, TeleportClientStatePayload> CODEC =
+            StreamCodec.ofMember(
                     TeleportClientStatePayload::write,
-                    TeleportClientStatePayload::new
+                    TeleportClientStatePayload::read
             );
 
-    private TeleportClientStatePayload(RegistryByteBuf buf) {
-        this(
-                buf.readUuid(),
+    private void write(RegistryFriendlyByteBuf buf) {
+        buf.writeUUID(sessionId);
+        buf.writeVarInt(state.wireId());
+    }
+
+    public static TeleportClientStatePayload read(RegistryFriendlyByteBuf buf) {
+        return new TeleportClientStatePayload(
+                buf.readUUID(),
                 readState(buf)
         );
     }
 
-    private void write(RegistryByteBuf buf) {
-        buf.writeUuid(sessionId);
-        buf.writeVarInt(state.wireId());
-    }
-
-    private static TeleportClientState readState(RegistryByteBuf buf) {
+    private static TeleportClientState readState(RegistryFriendlyByteBuf buf) {
         return TeleportClientState.fromWireId(buf.readVarInt());
     }
 
     @Override
-    public Id<? extends CustomPayload> getId() {
-        return ID;
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }

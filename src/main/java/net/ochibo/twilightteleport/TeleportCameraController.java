@@ -1,19 +1,19 @@
 package net.ochibo.twilightteleport;
 
-import net.minecraft.client.world.ClientChunkManager;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.client.render.chunk.ChunkBuilder;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.ChunkSection;
-import net.minecraft.world.chunk.ChunkStatus;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.client.CameraType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.multiplayer.ClientChunkCache;
+import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.Vec3;
 import net.ochibo.twilightteleport.client.hud.TeleportLoadingStatusHud;
 import net.ochibo.twilightteleport.client.network.TeleportClientNetworking;
 import net.ochibo.twilightteleport.network.TeleportClientState;
@@ -72,8 +72,8 @@ public final class TeleportCameraController {
     private static int phaseTicks;
     private static TeleportTimingProfile activeTimings =
             TeleportTimingProfile.defaults();
-    private static Vec3d departureFocus;
-    private static Vec3d arrivalFocus;
+    private static Vec3 departureFocus;
+    private static Vec3 arrivalFocus;
 
     private static boolean arrivalCaptureRequested;
     private static int arrivalCaptureDelay;
@@ -89,7 +89,7 @@ public final class TeleportCameraController {
     private static LoadingStatus loadingStatus =
             LoadingStatus.NONE;
 
-    private static Perspective previousCameraType;
+    private static CameraType previousCameraType;
 
     private static CameraPose departureFirstPerson;
     private static CameraPose departureSide;
@@ -97,8 +97,8 @@ public final class TeleportCameraController {
     private static CameraPose arrivalFirstPerson;
     private static CameraPose arrivalSide;
 
-    private static RegistryKey<World> departureDimension;
-    private static Vec3d departureFeet;
+    private static ResourceKey<Level> departureDimension;
+    private static Vec3 departureFeet;
 
     private static Runnable actionWhenFullyBlack;
 
@@ -119,9 +119,9 @@ public final class TeleportCameraController {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
-        if (client.player == null || client.world == null) {
+        if (client.player == null || client.level == null) {
             return;
         }
 
@@ -200,10 +200,10 @@ public final class TeleportCameraController {
             Runnable actionWhenBlack,
             TeleportTimingProfile timings
     ) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        ClientPlayerEntity player = client.player;
+        Minecraft client = Minecraft.getInstance();
+        LocalPlayer player = client.player;
 
-        if (isRunning() || player == null || client.world == null) {
+        if (isRunning() || player == null || client.level == null) {
             return;
         }
 
@@ -211,7 +211,7 @@ public final class TeleportCameraController {
                 ? TeleportTimingProfile.defaults()
                 : timings;
 
-        previousCameraType = client.options.getPerspective();
+        previousCameraType = client.options.getCameraType();
 
         departureFirstPerson = createFirstPersonPose(player);
         departureFocus = createFocus(player);
@@ -222,8 +222,8 @@ public final class TeleportCameraController {
                 departureFocus
         );
 
-        departureDimension = client.world.getRegistryKey();
-        departureFeet = player.getPos();
+        departureDimension = client.level.dimension();
+        departureFeet = player.position();
 
         arrivalFirstPerson = null;
         arrivalSide = null;
@@ -248,7 +248,7 @@ public final class TeleportCameraController {
                 : actionWhenBlack;
 
         
-        client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+        client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
 
         setPhase(Phase.MOVE_TO_SIDE);
     }
@@ -264,14 +264,14 @@ public final class TeleportCameraController {
         arrivalCaptureDelay = 0;
     }
 
-    public static void tick(MinecraftClient client) {
+    public static void tick(Minecraft client) {
         if (!isRunning()) {
             return;
         }
 
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
 
-        if (player == null || client.world == null) {
+        if (player == null || client.level == null) {
             if (activeNetworkSessionId != null
                     && isBlackoutWaitPhase()) {
                 phaseTicks++;
@@ -290,12 +290,12 @@ public final class TeleportCameraController {
         }
 
 
-        client.options.setPerspective(
-                Perspective.THIRD_PERSON_BACK
+        client.options.setCameraType(
+                CameraType.THIRD_PERSON_BACK
         );
         player.setSprinting(false);
-        player.setSneaking(false);
-        player.setVelocity(Vec3d.ZERO);
+        player.setShiftKeyDown(false);
+        player.setDeltaMovement(Vec3.ZERO);
 
         phaseTicks++;
 
@@ -363,7 +363,7 @@ public final class TeleportCameraController {
 
                 
                 if (!terrainUpdateScheduled) {
-                    client.worldRenderer.scheduleTerrainUpdate();
+                    client.levelExtractor.allChanged();
                     terrainUpdateScheduled = true;
                 }
 
@@ -509,12 +509,12 @@ public final class TeleportCameraController {
     }
 
     private static CameraFrame createOrbitFrame(
-            Vec3d focus,
+            Vec3 focus,
             CameraPose sidePose,
             float phaseProgress,
             boolean reverse
     ) {
-        float rawProgress = MathHelper.clamp(
+        float rawProgress = Mth.clamp(
                 phaseProgress,
                 0.0F,
                 1.0F
@@ -537,7 +537,7 @@ public final class TeleportCameraController {
         if (reverse) {
             
             float lookDownRawProgress =
-                    MathHelper.clamp(
+                    Mth.clamp(
                             rawProgress
                                     / (1.0F - LOOK_UP_START_PROGRESS),
                             0.0F,
@@ -565,7 +565,7 @@ public final class TeleportCameraController {
                     );
         }
 
-        Vec3d relativePosition =
+        Vec3 relativePosition =
                 sidePose.position().subtract(focus);
 
         double angleRadians =
@@ -577,7 +577,7 @@ public final class TeleportCameraController {
         double cos = Math.cos(angleRadians);
         double sin = Math.sin(angleRadians);
 
-        Vec3d rotatedOffset = new Vec3d(
+        Vec3 rotatedOffset = new Vec3(
                 relativePosition.x * cos
                         - relativePosition.z * sin,
 
@@ -587,13 +587,13 @@ public final class TeleportCameraController {
                         + relativePosition.z * cos
         );
 
-        Vec3d cameraPosition =
+        Vec3 cameraPosition =
                 focus.add(rotatedOffset);
 
         CameraPose facingPlayer =
                 lookAt(cameraPosition, focus);
 
-        float pitch = MathHelper.lerp(
+        float pitch = Mth.lerp(
                 lookUpProgress,
                 sidePose.pitch(),
                 ORBIT_END_PITCH
@@ -611,14 +611,14 @@ public final class TeleportCameraController {
             float value,
             float accelerationEndProgress
     ) {
-        float progress = MathHelper.clamp(
+        float progress = Mth.clamp(
                 value,
                 0.0F,
                 1.0F
         );
 
         float accelerationEnd =
-                MathHelper.clamp(
+                Mth.clamp(
                         accelerationEndProgress,
                         0.05F,
                         0.95F
@@ -649,13 +649,13 @@ public final class TeleportCameraController {
             float progress,
             float startProgress
     ) {
-        float start = MathHelper.clamp(
+        float start = Mth.clamp(
                 startProgress,
                 0.0F,
                 0.999F
         );
 
-        return MathHelper.clamp(
+        return Mth.clamp(
                 (progress - start)
                         / (1.0F - start),
                 0.0F,
@@ -664,12 +664,12 @@ public final class TeleportCameraController {
     }
 
 
-    private static Vec3d createFocus(
-            ClientPlayerEntity player
+    private static Vec3 createFocus(
+            LocalPlayer player
     ) {
-        return player.getPos().add(
+        return player.position().add(
                 0.0D,
-                player.getHeight() * 0.55D,
+                player.getBbHeight() * 0.55D,
                 0.0D
         );
     }
@@ -706,7 +706,7 @@ public final class TeleportCameraController {
     private static float getOrbitFadeAlpha(
             float orbitProgress
     ) {
-        float fadeProgress = MathHelper.clamp(
+        float fadeProgress = Mth.clamp(
                 (orbitProgress - FADE_START_PROGRESS)
                         / (1.0F - FADE_START_PROGRESS),
                 0.0F,
@@ -755,22 +755,22 @@ public final class TeleportCameraController {
                 >= LOADING_STATUS_DELAY_TICKS;
     }
 
-    public static Text getLoadingStatusText() {
+    public static Component getLoadingStatusText() {
         return switch (loadingStatus) {
             case WAITING_FOR_WORLD ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.waiting_world"
                     );
 
             case WAITING_FOR_TELEPORT ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.waiting_teleport"
                     );
 
             case LOADING_CHUNKS -> {
                 final int percentage =
                         Math.round(
-                                MathHelper.clamp(
+                                Mth.clamp(
                                         lastLoadedChunkRatio,
                                         0.0F,
                                         1.0F
@@ -783,7 +783,7 @@ public final class TeleportCameraController {
                                         * 100.0F
                         );
 
-                final int finalPercentage = MathHelper.clamp(
+                final int finalPercentage = Mth.clamp(
                         Math.round(
                                 (float) percentage
                                         / requiredPercentage
@@ -793,43 +793,43 @@ public final class TeleportCameraController {
                         100
                 );
 
-                yield Text.translatable(
+                yield Component.translatable(
                         "hud.twilightteleport.loading.chunks",
                         finalPercentage + "%"
                 );
             }
 
             case PREPARING_RENDER ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.preparing_render"
                     );
 
             case BUILDING_TERRAIN ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.building_terrain"
                     );
 
             case BUILDING_CHUNK_MESHES ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.building_chunk_meshes"
                     );
 
             case UPLOADING_TO_GPU ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.uploading_gpu"
                     );
 
             case WAITING_FOR_REBUILD_SIGNAL ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.waiting_rebuild"
                     );
 
             case FINALIZING ->
-                    Text.translatable(
+                    Component.translatable(
                             "hud.twilightteleport.loading.finalizing"
                     );
 
-            case NONE -> Text.empty();
+            case NONE -> Component.empty();
         };
     }
 
@@ -850,7 +850,7 @@ public final class TeleportCameraController {
     }
 
     private static float smootherStep(float value) {
-        float x = MathHelper.clamp(
+        float x = Mth.clamp(
                 value,
                 0.0F,
                 1.0F
@@ -862,10 +862,10 @@ public final class TeleportCameraController {
     }
 
     public static void cancel() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
 
         if (previousCameraType != null) {
-            client.options.setPerspective(previousCameraType);
+            client.options.setCameraType(previousCameraType);
         }
 
         clear();
@@ -881,29 +881,29 @@ public final class TeleportCameraController {
     }
 
     private static boolean hasAutomaticallyDetectedArrival(
-            MinecraftClient client,
-            ClientPlayerEntity player
+            Minecraft client,
+            LocalPlayer player
     ) {
         if (departureDimension == null || departureFeet == null) {
             return false;
         }
 
         boolean dimensionChanged =
-                !client.world.getRegistryKey().equals(departureDimension);
+                !client.level.dimension().equals(departureDimension);
 
         
         boolean positionChanged =
-                player.getPos().distanceTo(departureFeet) > 4.0D;
+                player.position().distanceTo(departureFeet) > 4.0D;
 
         return dimensionChanged || positionChanged;
     }
 
 
     private static boolean isDestinationLoadAndRenderComplete(
-            MinecraftClient client,
-            ClientPlayerEntity player
+            Minecraft client,
+            LocalPlayer player
     ) {
-        if (client.world == null) {
+        if (client.level == null) {
             loadingStatus =
                     LoadingStatus.WAITING_FOR_WORLD;
             return false;
@@ -915,14 +915,14 @@ public final class TeleportCameraController {
         
         int renderDistance = Math.max(
                 1,
-                client.options.getClampedViewDistance()
+                client.options.getEffectiveRenderDistance()
         );
 
-        ClientChunkManager chunkManager =
-                client.world.getChunkManager();
+        ClientChunkCache chunkManager =
+                client.level.getChunkSource();
 
         ChunkPos center =
-                player.getChunkPos();
+                player.chunkPosition();
 
         
         int radiusSquared =
@@ -948,9 +948,9 @@ public final class TeleportCameraController {
 
                 totalChunkCount++;
 
-                if (chunkManager.isChunkLoaded(
-                        center.x + offsetX,
-                        center.z + offsetZ
+                if (chunkManager.hasChunk(
+                        center.x() + offsetX,
+                        center.z() + offsetZ
                 )) {
                     loadedChunkCount++;
                 }
@@ -967,7 +967,7 @@ public final class TeleportCameraController {
                         / (float) totalChunkCount;
 
         lastLoadedChunkRatio =
-                MathHelper.clamp(
+                Mth.clamp(
                         loadedChunkRatio,
                         0.0F,
                         1.0F
@@ -981,13 +981,13 @@ public final class TeleportCameraController {
         }
 
         
-        if (!chunkManager.isChunkLoaded(center.x, center.z)) {
+        if (!chunkManager.hasChunk(center.x(), center.z())) {
             emptyRenderQueueStableTicks = 0;
             return false;
         }
 
-        ChunkBuilder chunkBuilder =
-                client.worldRenderer.getChunkBuilder();
+        SectionRenderDispatcher chunkBuilder =
+                client.levelRenderer.sectionRenderDispatcher();
 
         if (chunkBuilder == null) {
             emptyRenderQueueStableTicks = 0;
@@ -1000,8 +1000,8 @@ public final class TeleportCameraController {
         loadingStatus =
                 LoadingStatus.PREPARING_RENDER;
 
-        if (!client.worldRenderer
-                .isRenderingReady(player.getBlockPos())) {
+        if (!client.levelRenderer
+                .isSectionCompiledAndVisible(player.blockPosition())) {
             if (canFinishWithoutRenderableTerrain(
                     client,
                     player,
@@ -1021,21 +1021,21 @@ public final class TeleportCameraController {
         loadingStatus =
                 LoadingStatus.BUILDING_TERRAIN;
 
-        if (!client.worldRenderer
-                .isTerrainRenderComplete()) {
+        if (!client.levelRenderer
+                .hasRenderedAllSections()) {
             return false;
         }
 
         
-        if (!chunkBuilder.isEmpty()
-                || chunkBuilder.getToBatchCount() > 0) {
+        if (!chunkBuilder.isQueueEmpty()
+                || chunkBuilder.getCompileQueueSize() > 0) {
             loadingStatus =
                     LoadingStatus.BUILDING_CHUNK_MESHES;
             return false;
         }
 
         
-        if (chunkBuilder.getChunksToUpload() > 0) {
+        if (chunkBuilder.getFreeBufferCount() > 0) {
             loadingStatus =
                     LoadingStatus.UPLOADING_TO_GPU;
             return false;
@@ -1049,14 +1049,14 @@ public final class TeleportCameraController {
 
 
     private static boolean canFinishWithoutRenderableTerrain(
-            MinecraftClient client,
-            ClientPlayerEntity player,
-            ChunkBuilder chunkBuilder
+            Minecraft client,
+            LocalPlayer player,
+            SectionRenderDispatcher chunkBuilder
     ) {
         boolean renderQueueIdle =
-                chunkBuilder.isEmpty()
-                        && chunkBuilder.getToBatchCount() <= 0
-                        && chunkBuilder.getChunksToUpload() <= 0;
+                chunkBuilder.isQueueEmpty()
+                        && chunkBuilder.getCompileQueueSize() <= 0
+                        && chunkBuilder.getFreeBufferCount() <= 0;
 
         if (!renderQueueIdle) {
             emptyRenderQueueStableTicks = 0;
@@ -1077,16 +1077,16 @@ public final class TeleportCameraController {
 
     
     private static boolean hasNoRenderableTerrainNearby(
-            MinecraftClient client,
-            ClientPlayerEntity player
+            Minecraft client,
+            LocalPlayer player
     ) {
-        if (client.world == null) {
+        if (client.level == null) {
             return false;
         }
 
         int renderDistance = Math.max(
                 1,
-                client.options.getClampedViewDistance()
+                client.options.getEffectiveRenderDistance()
         );
 
         int scanRadius = Math.max(
@@ -1097,18 +1097,18 @@ public final class TeleportCameraController {
         );
 
         int radiusSquared = scanRadius * scanRadius;
-        ChunkPos centerChunk = player.getChunkPos();
+        ChunkPos centerChunk = player.chunkPosition();
         int centerSectionY = Math.floorDiv(
                 player.getBlockY(),
                 16
         );
         int bottomSectionY = Math.floorDiv(
-                client.world.getBottomY(),
+                client.level.getMinSectionY(),
                 16
         );
 
-        ClientChunkManager chunkManager =
-                client.world.getChunkManager();
+        ClientChunkCache chunkManager =
+                client.level.getChunkSource();
 
         for (int offsetX = -scanRadius;
              offsetX <= scanRadius;
@@ -1126,9 +1126,9 @@ public final class TeleportCameraController {
                     continue;
                 }
 
-                WorldChunk chunk = chunkManager.getChunk(
-                        centerChunk.x + offsetX,
-                        centerChunk.z + offsetZ,
+                LevelChunk chunk = chunkManager.getChunk(
+                        centerChunk.x() + offsetX,
+                        centerChunk.z() + offsetZ,
                         ChunkStatus.FULL,
                         false
                 );
@@ -1138,8 +1138,8 @@ public final class TeleportCameraController {
                     return false;
                 }
 
-                ChunkSection[] sections =
-                        chunk.getSectionArray();
+                LevelChunkSection[] sections =
+                        chunk.getSections();
 
                 for (int sectionIndex = 0;
                      sectionIndex < sections.length;
@@ -1158,10 +1158,10 @@ public final class TeleportCameraController {
                         continue;
                     }
 
-                    ChunkSection section =
+                    LevelChunkSection section =
                             sections[sectionIndex];
 
-                    if (section != null && !section.isEmpty()) {
+                    if (section != null && !section.hasOnlyAir()) {
                         return false;
                     }
                 }
@@ -1192,11 +1192,11 @@ public final class TeleportCameraController {
     }
 
     private static void captureArrival(
-            MinecraftClient client
+            Minecraft client
     ) {
-        ClientPlayerEntity player = client.player;
+        LocalPlayer player = client.player;
 
-        if (player == null || client.world == null) {
+        if (player == null || client.level == null) {
             cancel();
             return;
         }
@@ -1220,43 +1220,43 @@ public final class TeleportCameraController {
         setPhase(Phase.WAITING_FOR_RENDER);
     }
 
-    private static CameraPose createFirstPersonPose(ClientPlayerEntity player) {
+    private static CameraPose createFirstPersonPose(LocalPlayer player) {
         return new CameraPose(
-                player.getEyePos(),
-                player.getYaw(),
-                player.getPitch()
+                player.getEyePosition(),
+                player.getYRot(),
+                player.getXRot()
         );
     }
 
     private static CameraPose createSidePose(
-            ClientPlayerEntity player,
+            LocalPlayer player,
             float playerYaw,
-            Vec3d focus
+            Vec3 focus
     ) {
         double yawRadians = Math.toRadians(playerYaw);
 
-        Vec3d right = new Vec3d(
+        Vec3 right = new Vec3(
                 Math.cos(yawRadians),
                 0.0D,
                 Math.sin(yawRadians)
         );
 
-        Vec3d forward = new Vec3d(
+        Vec3 forward = new Vec3(
                 -Math.sin(yawRadians),
                 0.0D,
                 Math.cos(yawRadians)
         );
 
-        Vec3d cameraPosition = focus
-                .add(right.multiply(SIDE_DISTANCE))
-                .add(forward.multiply(SIDE_FORWARD_OFFSET))
+        Vec3 cameraPosition = focus
+                .add(right.scale(SIDE_DISTANCE))
+                .add(forward.scale(SIDE_FORWARD_OFFSET))
                 .add(0.0D, SIDE_HEIGHT_OFFSET, 0.0D);
 
         return lookAt(cameraPosition, focus);
     }
 
-    private static CameraPose lookAt(Vec3d cameraPosition, Vec3d target) {
-        Vec3d difference = target.subtract(cameraPosition);
+    private static CameraPose lookAt(Vec3 cameraPosition, Vec3 target) {
+        Vec3 difference = target.subtract(cameraPosition);
 
         double horizontalDistance = Math.sqrt(
                 difference.x * difference.x
@@ -1275,7 +1275,7 @@ public final class TeleportCameraController {
     }
 
     private static float progress(float partialTick, int durationTicks) {
-        return MathHelper.clamp(
+        return Mth.clamp(
                 (phaseTicks + partialTick) / durationTicks,
                 0.0F,
                 1.0F
@@ -1284,7 +1284,7 @@ public final class TeleportCameraController {
 
     
     private static float easeOutCubic(float value) {
-        float x = MathHelper.clamp(value, 0.0F, 1.0F);
+        float x = Mth.clamp(value, 0.0F, 1.0F);
         float inverse = 1.0F - x;
 
         return 1.0F - inverse * inverse * inverse;
@@ -1292,7 +1292,7 @@ public final class TeleportCameraController {
 
     
     private static float easeInOutCubic(float value) {
-        float x = MathHelper.clamp(value, 0.0F, 1.0F);
+        float x = Mth.clamp(value, 0.0F, 1.0F);
 
         if (x < 0.5F) {
             return 4.0F * x * x * x;
@@ -1317,9 +1317,9 @@ public final class TeleportCameraController {
         }
     }
 
-    private static void finish(MinecraftClient client) {
+    private static void finish(Minecraft client) {
         
-        client.options.setPerspective(Perspective.FIRST_PERSON);
+        client.options.setCameraType(CameraType.FIRST_PERSON);
         clear();
     }
 
@@ -1365,7 +1365,7 @@ public final class TeleportCameraController {
             float to,
             float progress
     ) {
-        float difference = MathHelper.wrapDegrees(to - from);
+        float difference = Mth.wrapDegrees(to - from);
         return from + difference * progress;
     }
 
@@ -1416,7 +1416,7 @@ public final class TeleportCameraController {
             return 0.0F;
         }
 
-        return MathHelper.clamp(
+        return Mth.clamp(
                 (
                         phaseTicks
                                 + tickDelta
@@ -1442,7 +1442,7 @@ public final class TeleportCameraController {
     }
 
     private record CameraPose(
-            Vec3d position,
+            Vec3 position,
             float yaw,
             float pitch
     ) {
@@ -1450,7 +1450,7 @@ public final class TeleportCameraController {
                 CameraPose target,
                 float progress
         ) {
-            Vec3d interpolatedPosition =
+            Vec3 interpolatedPosition =
                     position.lerp(target.position, progress);
 
             float interpolatedYaw = interpolateDegrees(
@@ -1459,7 +1459,7 @@ public final class TeleportCameraController {
                     progress
             );
 
-            float interpolatedPitch = MathHelper.lerp(
+            float interpolatedPitch = Mth.lerp(
                     progress,
                     pitch,
                     target.pitch
@@ -1534,7 +1534,7 @@ public final class TeleportCameraController {
 
 
     public record CameraFrame(
-            Vec3d position,
+            Vec3 position,
             float yaw,
             float pitch
     ) {

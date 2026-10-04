@@ -2,7 +2,7 @@ package net.ochibo.twilightteleport.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
+import net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry;
 import net.ochibo.twilightteleport.ModParticles;
 import net.ochibo.twilightteleport.TeleportCameraController;
 import net.ochibo.twilightteleport.client.command.TwilightTeleportClientCommand;
@@ -23,7 +23,7 @@ public class TwilightTeleportClient
         TeleportDissolveShaders.register();
         TeleportClientNetworking.register();
 
-        ParticleFactoryRegistry.getInstance().register(
+        ParticleProviderRegistry.getInstance().register(
                 ModParticles.TELEPORT_SHARD,
                 TeleportShardParticle.Factory::new
         );

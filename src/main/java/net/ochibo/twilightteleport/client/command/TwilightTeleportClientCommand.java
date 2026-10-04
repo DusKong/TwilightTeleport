@@ -1,12 +1,13 @@
 package net.ochibo.twilightteleport.client.command;
 
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.network.chat.Component;
 import net.ochibo.twilightteleport.config.ParticleAmount;
 import net.ochibo.twilightteleport.config.TwilightTeleportConfigManager;
+
+import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
 public final class TwilightTeleportClientCommand {
 
@@ -17,11 +18,10 @@ public final class TwilightTeleportClientCommand {
         ClientCommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess) ->
                         dispatcher.register(
-                                ClientCommandManager.literal("ttp")
+                                literal("ttp")
                                         .then(createParticleCommand())
                                         .then(
-                                                ClientCommandManager
-                                                        .literal("reset")
+                                                literal("reset")
                                                         .executes(context ->
                                                                 resetConfig(
                                                                         context.getSource()
@@ -34,7 +34,7 @@ public final class TwilightTeleportClientCommand {
 
     private static LiteralArgumentBuilder<FabricClientCommandSource>
     createParticleCommand() {
-        return ClientCommandManager.literal("particle")
+        return literal("particle")
                 .then(particleOption("none", ParticleAmount.NONE))
                 .then(particleOption("nothing", ParticleAmount.NONE))
                 .then(particleOption("few", ParticleAmount.FEW))
@@ -46,7 +46,7 @@ public final class TwilightTeleportClientCommand {
             String literal,
             ParticleAmount amount
     ) {
-        return ClientCommandManager.literal(literal)
+        return literal(literal)
                 .executes(context -> setParticleAmount(
                         context.getSource(),
                         amount
@@ -63,7 +63,7 @@ public final class TwilightTeleportClientCommand {
         TwilightTeleportConfigManager.save();
 
         source.sendFeedback(
-                Text.translatable(
+                Component.translatable(
                         "command.twilightteleport.particle_set",
                         amount.displayText()
                 )
@@ -78,7 +78,7 @@ public final class TwilightTeleportClientCommand {
         TwilightTeleportConfigManager.reset();
 
         source.sendFeedback(
-                Text.translatable(
+                Component.translatable(
                         "command.twilightteleport.reset"
                 )
         );

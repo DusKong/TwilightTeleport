@@ -1,8 +1,7 @@
 package net.ochibo.twilightteleport.mixin.client;
 
-import net.minecraft.client.render.Camera;
-import net.minecraft.entity.Entity;
-import net.minecraft.world.BlockView;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
 import net.ochibo.twilightteleport.TeleportCameraController;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,15 +16,10 @@ public abstract class CameraMixin {
             at = @At("TAIL")
     )
     private void twilightTeleport$applyTeleportCamera(
-            BlockView area,
-            Entity focusedEntity,
-            boolean thirdPerson,
-            boolean inverseView,
-            float tickDelta,
-            CallbackInfo ci
+            DeltaTracker deltaTracker, CallbackInfo ci
     ) {
         TeleportCameraController.CameraFrame frame =
-                TeleportCameraController.getCameraFrame(tickDelta);
+                TeleportCameraController.getCameraFrame(deltaTracker.getGameTimeDeltaPartialTick(false));
 
         if (frame == null) {
             return;

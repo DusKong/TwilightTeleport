@@ -1,7 +1,8 @@
 package net.ochibo.twilightteleport.client.render;
 
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.util.math.MathHelper;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.util.ARGB;
+import net.minecraft.util.Mth;
 import net.ochibo.twilightteleport.config.TwilightTeleportConfigManager;
 
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer vertex(
+    public VertexConsumer addVertex(
             float x,
             float y,
             float z
@@ -55,7 +56,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer color(
+    public VertexConsumer setColor(
             int red,
             int green,
             int blue,
@@ -73,7 +74,12 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer texture(
+    public VertexConsumer setColor(int i) {
+        return this.setColor(ARGB.red(i), ARGB.green(i), ARGB.blue(i), ARGB.alpha(i));
+    }
+
+    @Override
+    public VertexConsumer setUv(
             float u,
             float v
     ) {
@@ -86,7 +92,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer overlay(
+    public VertexConsumer setUv1(
             int u,
             int v
     ) {
@@ -99,7 +105,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer light(
+    public VertexConsumer setUv2(
             int u,
             int v
     ) {
@@ -112,7 +118,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
     }
 
     @Override
-    public VertexConsumer normal(
+    public VertexConsumer setNormal(
             float x,
             float y,
             float z
@@ -127,8 +133,12 @@ public final class TeleportShaderPackFallbackVertexConsumer
         return this;
     }
 
+    public VertexConsumer setLineWidth(float width) {
+        return this;
+    }
+
     @Override
-    public void vertex(
+    public void addVertex(
             float x,
             float y,
             float z,
@@ -340,7 +350,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
                 y
         );
 
-        delegate.vertex(
+        delegate.addVertex(
                 bilerp(
                         v00.x(), v10.x(), v11.x(), v01.x(), x, y
                 ),
@@ -394,10 +404,10 @@ public final class TeleportShaderPackFallbackVertexConsumer
             float x,
             float y
     ) {
-        float top = MathHelper.lerp(x, v00, v10);
-        float bottom = MathHelper.lerp(x, v01, v11);
+        float top = Mth.lerp(x, v00, v10);
+        float bottom = Mth.lerp(x, v01, v11);
 
-        return MathHelper.lerp(y, top, bottom);
+        return Mth.lerp(y, top, bottom);
     }
 
     private static VertexData nearestVertex(
@@ -446,7 +456,7 @@ public final class TeleportShaderPackFallbackVertexConsumer
             float x,
             float y
     ) {
-        return MathHelper.clamp(
+        return Mth.clamp(
                 Math.round(
                         bilerp(
                                 v00 >>> shift & 0xFF,
@@ -466,10 +476,10 @@ public final class TeleportShaderPackFallbackVertexConsumer
             int component,
             float multiplier
     ) {
-        return MathHelper.clamp(
+        return Mth.clamp(
                 Math.round(
                         component
-                                * MathHelper.clamp(
+                                * Mth.clamp(
                                 multiplier,
                                 0.0F,
                                 1.0F

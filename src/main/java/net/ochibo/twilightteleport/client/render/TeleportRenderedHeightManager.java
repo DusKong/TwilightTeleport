@@ -1,13 +1,13 @@
 package net.ochibo.twilightteleport.client.render;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.entity.EquipmentSlot;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -118,11 +118,11 @@ public final class TeleportRenderedHeightManager {
 
     
     public static void beginPlayerRender(
-            AbstractClientPlayerEntity player,
+            AbstractClientPlayer player,
             float tickDelta,
             float renderYaw
     ) {
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
 
         
         if (TeleportShaderPackCompat.isShadowPass()) {
@@ -136,20 +136,20 @@ public final class TeleportRenderedHeightManager {
             return;
         }
 
-        MinecraftClient client =
-                MinecraftClient.getInstance();
+        Minecraft client =
+                Minecraft.getInstance();
 
         if (client.gameRenderer == null) {
             return;
         }
 
-        Vec3d cameraPosition =
-                client.gameRenderer.getCamera().getPos();
+        Vec3 cameraPosition =
+                client.gameRenderer.mainCamera().position();
 
-        Vec3d playerPosition =
-                player.getLerpedPos(tickDelta);
+        Vec3 playerPosition =
+                player.getPosition(tickDelta);
 
-        Vec3d cameraRelativePlayerOrigin =
+        Vec3 cameraRelativePlayerOrigin =
                 playerPosition.subtract(cameraPosition);
 
         ACTIVE_MEASUREMENTS.put(
@@ -158,7 +158,7 @@ public final class TeleportRenderedHeightManager {
                         (float) cameraRelativePlayerOrigin.x,
                         (float) cameraRelativePlayerOrigin.y,
                         (float) cameraRelativePlayerOrigin.z,
-                        player.getHeight(),
+                        player.getBbHeight(),
                         copyHeadStack(player),
                         renderYaw
                 )
@@ -206,9 +206,9 @@ public final class TeleportRenderedHeightManager {
 
     
     public static void endPlayerRender(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
 
         ActiveMeasurement measurement =
                 ACTIVE_MEASUREMENTS.remove(playerUuid);
@@ -239,7 +239,7 @@ public final class TeleportRenderedHeightManager {
         float baseHeight =
                 Math.max(
                         0.01F,
-                        player.getHeight()
+                        player.getBbHeight()
                 );
 
         float fallbackHeight =
@@ -300,7 +300,7 @@ public final class TeleportRenderedHeightManager {
         }
 
         float measuredHeight =
-                MathHelper.clamp(
+                Mth.clamp(
                         rawMeasuredHeight,
                         baseHeight,
                         maximumAllowedHeight
@@ -320,11 +320,11 @@ public final class TeleportRenderedHeightManager {
 
     
     public static float getEffectHeight(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
         Float effectHeight =
                 EFFECT_HEIGHTS.get(
-                        player.getUuid()
+                        player.getUUID()
                 );
 
         if (effectHeight != null) {
@@ -335,15 +335,15 @@ public final class TeleportRenderedHeightManager {
     }
 
     
-    public static Vec3d sampleCrossSectionPoint(
-            AbstractClientPlayerEntity player,
+    public static Vec3 sampleCrossSectionPoint(
+            AbstractClientPlayer player,
             float localBoundaryY,
             float tolerance,
-            Random random
+            RandomSource random
     ) {
         List<MeshPoint> points =
                 EFFECT_MESH_POINTS.getOrDefault(
-                        player.getUuid(),
+                        player.getUUID(),
                         List.of()
                 );
 
@@ -359,11 +359,11 @@ public final class TeleportRenderedHeightManager {
 
         float captureYaw =
                 EFFECT_CAPTURE_YAWS.getOrDefault(
-                        player.getUuid(),
-                        player.getBodyYaw()
+                        player.getUUID(),
+                        player.getVisualRotationYInDegrees()
                 );
 
-        float currentYaw = player.getBodyYaw();
+        float currentYaw = player.getVisualRotationYInDegrees();
 
         for (MeshPoint point : points) {
             if (Math.abs(point.y() - localBoundaryY)
@@ -371,7 +371,7 @@ public final class TeleportRenderedHeightManager {
                 continue;
             }
 
-            Vec3d rotated = rotateHorizontalOffset(
+            Vec3 rotated = rotateHorizontalOffset(
                     point.x(),
                     point.z(),
                     captureYaw,
@@ -390,7 +390,7 @@ public final class TeleportRenderedHeightManager {
             float halfWidth =
                     Math.max(
                             0.08F,
-                            player.getWidth() * 0.52F
+                            player.getBbWidth() * 0.52F
                     );
 
             minimumX = -halfWidth;
@@ -398,25 +398,25 @@ public final class TeleportRenderedHeightManager {
             minimumZ = -halfWidth;
             maximumZ = halfWidth;
         } else {
-            minimumX = MathHelper.clamp(
+            minimumX = Mth.clamp(
                     minimumX,
                     -MAX_CROSS_SECTION_RADIUS,
                     MAX_CROSS_SECTION_RADIUS
             );
 
-            maximumX = MathHelper.clamp(
+            maximumX = Mth.clamp(
                     maximumX,
                     -MAX_CROSS_SECTION_RADIUS,
                     MAX_CROSS_SECTION_RADIUS
             );
 
-            minimumZ = MathHelper.clamp(
+            minimumZ = Mth.clamp(
                     minimumZ,
                     -MAX_CROSS_SECTION_RADIUS,
                     MAX_CROSS_SECTION_RADIUS
             );
 
-            maximumZ = MathHelper.clamp(
+            maximumZ = Mth.clamp(
                     maximumZ,
                     -MAX_CROSS_SECTION_RADIUS,
                     MAX_CROSS_SECTION_RADIUS
@@ -457,25 +457,25 @@ public final class TeleportRenderedHeightManager {
                         + random.nextDouble()
                         * (maximumZ - minimumZ);
 
-        Vec3d playerPosition =
-                player.getPos();
+        Vec3 playerPosition =
+                player.position();
 
-        return new Vec3d(
+        return new Vec3(
                 playerPosition.x + localX,
                 playerPosition.y + localBoundaryY,
                 playerPosition.z + localZ
         );
     }
 
-    public static Vec3d sampleMeshPointNearHeight(
-            AbstractClientPlayerEntity player,
+    public static Vec3 sampleMeshPointNearHeight(
+            AbstractClientPlayer player,
             float localBoundaryY,
             float tolerance,
-            Random random
+            RandomSource random
     ) {
         List<MeshPoint> points =
                 EFFECT_MESH_POINTS.getOrDefault(
-                        player.getUuid(),
+                        player.getUUID(),
                         List.of()
                 );
 
@@ -506,23 +506,23 @@ public final class TeleportRenderedHeightManager {
             return null;
         }
 
-        Vec3d playerPosition =
-                player.getPos();
+        Vec3 playerPosition =
+                player.position();
 
         float captureYaw =
                 EFFECT_CAPTURE_YAWS.getOrDefault(
-                        player.getUuid(),
-                        player.getBodyYaw()
+                        player.getUUID(),
+                        player.getVisualRotationYInDegrees()
                 );
 
-        Vec3d rotated = rotateHorizontalOffset(
+        Vec3 rotated = rotateHorizontalOffset(
                 selected.x(),
                 selected.z(),
                 captureYaw,
-                player.getBodyYaw()
+                player.getVisualRotationYInDegrees()
         );
 
-        return new Vec3d(
+        return new Vec3(
                 playerPosition.x + rotated.x,
                 playerPosition.y + selected.y(),
                 playerPosition.z + rotated.z
@@ -530,20 +530,20 @@ public final class TeleportRenderedHeightManager {
     }
 
     
-    public static Vec3d rotateHorizontalOffset(
+    public static Vec3 rotateHorizontalOffset(
             double offsetX,
             double offsetZ,
             float fromYaw,
             float toYaw
     ) {
         float angle = (float) Math.toRadians(
-                MathHelper.wrapDegrees(fromYaw - toYaw)
+                Mth.wrapDegrees(fromYaw - toYaw)
         );
 
-        float cosine = MathHelper.cos(angle);
-        float sine = MathHelper.sin(angle);
+        float cosine = Mth.cos(angle);
+        float sine = Mth.sin(angle);
 
-        return new Vec3d(
+        return new Vec3(
                 offsetX * cosine + offsetZ * sine,
                 0.0D,
                 -offsetX * sine + offsetZ * cosine
@@ -562,9 +562,9 @@ public final class TeleportRenderedHeightManager {
 
     
     public static boolean ensureEffectSnapshotReady(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
-        UUID playerUuid = player.getUuid();
+        UUID playerUuid = player.getUUID();
 
         if (EFFECT_HEIGHTS.containsKey(playerUuid)) {
             return true;
@@ -578,10 +578,10 @@ public final class TeleportRenderedHeightManager {
     }
 
     public static boolean isEffectSnapshotReady(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
         return EFFECT_HEIGHTS.containsKey(
-                player.getUuid()
+                player.getUUID()
         );
     }
 
@@ -623,15 +623,15 @@ public final class TeleportRenderedHeightManager {
     }
 
     private static float getSafeFallbackHeight(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
         float baseHeight =
                 Math.max(
                         0.01F,
-                        player.getHeight()
+                        player.getBbHeight()
                 );
 
-        return MathHelper.clamp(
+        return Mth.clamp(
                 Math.max(
                         baseHeight,
                         getOverrideHeight(player)
@@ -678,10 +678,10 @@ public final class TeleportRenderedHeightManager {
     }
 
     private static ItemStack copyHeadStack(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
         ItemStack stack =
-                player.getEquippedStack(
+                player.getItemBySlot(
                         EquipmentSlot.HEAD
                 );
 
@@ -703,24 +703,24 @@ public final class TeleportRenderedHeightManager {
                     && right.isEmpty();
         }
 
-        return ItemStack.areItemsAndComponentsEqual(
+        return ItemStack.isSameItemSameComponents(
                 left,
                 right
         );
     }
 
     private static float getOverrideHeight(
-            AbstractClientPlayerEntity player
+            AbstractClientPlayer player
     ) {
         ItemStack headStack =
-                player.getEquippedStack(
+                player.getItemBySlot(
                         EquipmentSlot.HEAD
                 );
 
         if (headStack.isEmpty()) {
             return Math.max(
                     0.01F,
-                    player.getHeight()
+                    player.getBbHeight()
             );
         }
 
@@ -732,7 +732,7 @@ public final class TeleportRenderedHeightManager {
 
         return Math.max(
                 0.01F,
-                player.getHeight()
+                player.getBbHeight()
         ) + extraHeight;
     }
 

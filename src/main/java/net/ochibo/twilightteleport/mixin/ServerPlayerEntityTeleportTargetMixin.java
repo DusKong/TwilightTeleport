@@ -2,17 +2,16 @@ package net.ochibo.twilightteleport.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import net.minecraft.entity.Entity;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.world.TeleportTarget;
+import net.minecraft.server.level.ServerPlayer;
 import net.ochibo.twilightteleport.server.PendingTeleportManager;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.Inject;
 
 
-@Mixin(ServerPlayerEntity.class)
+@Mixin(ServerPlayer.class)
 public abstract class ServerPlayerEntityTeleportTargetMixin {
 
-    @WrapMethod(
+    /*@WrapMethod(
             method =
                     "teleportTo"
                             + "(Lnet/minecraft/world/TeleportTarget;)"
@@ -36,5 +35,5 @@ public abstract class ServerPlayerEntityTeleportTargetMixin {
             PendingTeleportManager
                     .endTeleportTargetTransition(player);
         }
-    }
+    }*/
 }
